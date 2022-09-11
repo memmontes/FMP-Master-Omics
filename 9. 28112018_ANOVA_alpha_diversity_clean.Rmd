@@ -1,0 +1,509 @@
+---
+title: "ANOVA alpha diversity"
+author: "Esther Molina"
+date: "28 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## set the environment:
+
+```{r}
+
+
+# load all the libraries:
+library(phyloseq)
+library(vegan)
+library(ggplot2)
+library(gplots)
+
+#install.packages('utf8') in case you get an error with utf8 format
+```
+
+# load the data
+
+```{r}
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+# load the otudata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+```
+
+# calculate eveness:
+
+```{r}
+
+
+div.data.asv$EVEN<-div.data.asv$q.1/div.data.asv$q.0
+summary(div.data.asv$EVEN)
+
+div.data.otu$EVEN<-div.data.otu$q.1/div.data.otu$q.0
+summary(div.data.otu$EVEN)
+
+# add the case-control variable
+div.data.otu$Disease.status <- recode(div.data.otu$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+div.data.asv$Disease.status <- recode(div.data.asv$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+```
+
+# Perform the ANOVA analyses:
+
+```{r}
+
+# compare richness and diversity by case control status and site, separately
+fit<-aov(q.0~Disease.status, data=div.data.asv)
+summary(fit)
+# p=0.00319
+model.tables(fit, type="mean")
+
+fit<-aov(q.0~site, data=div.data.asv)
+summary(fit)
+# p=5.64e-06
+model.tables(fit, type="mean")
+
+# two-factorial ANOVA: we want to compare richness and diversity by casecontrol status and by site
+
+fit<-aov(q.0~Disease.status+site, data=div.data.asv)
+summary(fit)
+
+#                Df  Sum Sq Mean Sq F value   Pr(>F)    
+#Disease.status   2   33774   16887   6.041  0.00255 ** 
+#site             1   61028   61028  21.831 3.79e-06 ***
+
+# interaction:
+fit<-aov(q.0~Disease.status*site, data=div.data.asv)
+summary(fit)
+# p interaction: 0.25540
+model.tables(fit, type="mean")
+
+```
+
+## ANOVA analysis by site - RICHNESS q0: ASV data
+
+```{r}
+
+oral.samples<-subset(div.data.asv, div.data.asv$site=="oral cavity") 
+stool.samples<-subset(div.data.asv, div.data.asv$site=="stool") 
+
+
+#oral.samples<-subset(div.data.otu, div.data.otu$site=="oral cavity") # uncomment for OPEN
+#stool.samples<-subset(div.data.otu, div.data.otu$site=="stool") # uncomment for OPEN
+
+#### SALIVA
+
+# anova and post-tuckey for saliva
+
+a1 <- aov(EVEN ~ Disease.status, data=oral.samples)
+summary(a1)
+posthoc <- TukeyHSD(x=a1, 'Disease.status', conf.level=0.95)
+posthoc
+
+model.tables(a1, type="mean")
+# ASV
+#p=control-cancer=0.0107
+#p=pancreatitis-cancer=0.8905333
+#p=pancreatitis-cancer=0.1497116
+
+# OPEN
+#p=control-cancer=0.0664490
+#p=pancreatitis-cancer=0.6115704
+#p=pancreatitis-cancer=0.1122209
+
+# linear regression for saliva
+fit <- lm(q.2 ~ Disease.status, data=oral.samples) #q=0 richness
+summary(fit)
+anova(fit) 
+# ASV
+#p=0.008588
+# OPEN
+#p=0.0259
+
+#### STOOL
+
+# anova and post-tuckey for saliva
+
+a1 <- aov(EVEN ~ Disease.status, data=stool.samples)
+summary(a1)
+posthoc <- TukeyHSD(x=a1, 'Disease.status', conf.level=0.95)
+posthoc
+
+model.tables(a1, type="mean")
+# ASV
+#p=control-cancer=0.0208591
+#p=pancreatitis-cancer=0.0220665
+#p=pancreatitis-control=0.8691035
+# OPEN
+#p=control-cancer=0.0013962
+#p=pancreatitis-cancer=0.0380620
+#p=pancreatitis-control=0.9203532
+
+# linear regression for stool
+fit <- lm(q.0 ~ Disease.status, data=stool.samples) #q=0 richness
+summary(fit)
+anova(fit) 
+#ASV
+#p=0.00770
+#OPEN
+#p=0.001132
+
+```
+
+## ANOVA analysis by site - EVEN: ASV and OPEN data
+
+```{r}
+oral.samples<-subset(div.data.asv, div.data.asv$site=="oral cavity") 
+stool.samples<-subset(div.data.asv, div.data.asv$site=="stool") 
+
+
+#oral.samples<-subset(div.data.otu, div.data.otu$site=="oral cavity") # uncomment for OPEN
+#stool.samples<-subset(div.data.otu, div.data.otu$site=="stool") # uncomment for OPEN
+
+#### SALIVA
+
+# anova and post-tuckey for saliva
+
+a1 <- aov(q.0 ~ Disease.status, data=oral.samples)
+summary(a1)
+posthoc <- TukeyHSD(x=a1, 'Disease.status', conf.level=0.95)
+posthoc
+
+model.tables(a1, type="mean")
+# ASV
+#p=control-cancer=0.0107
+#p=pancreatitis-cancer=0.8905333
+#p=pancreatitis-cancer=0.1497116
+
+# OPEN
+#p=control-cancer=0.0664490
+#p=pancreatitis-cancer=0.6115704
+#p=pancreatitis-cancer=0.1122209
+
+# linear regression for saliva
+fit <- lm(q.0 ~ Disease.status, data=oral.samples) #q=0 richness
+summary(fit)
+anova(fit) 
+# ASV
+#p=0.008588
+# OPEN
+#p=0.0259
+
+#### STOOL
+
+# anova and post-tuckey for saliva
+
+a1 <- aov(q.0 ~ Disease.status, data=stool.samples)
+summary(a1)
+posthoc <- TukeyHSD(x=a1, 'Disease.status', conf.level=0.95)
+posthoc
+
+model.tables(a1, type="mean")
+# ASV
+#p=control-cancer=0.0208591
+#p=pancreatitis-cancer=0.0220665
+#p=pancreatitis-control=0.8691035
+# OPEN
+#p=control-cancer=0.0013962
+#p=pancreatitis-cancer=0.0380620
+#p=pancreatitis-control=0.9203532
+
+# linear regression for stool
+fit <- lm(q.0 ~ Disease.status, data=stool.samples) #q=0 richness
+summary(fit)
+anova(fit) 
+#ASV
+#p=0.00770
+#OPEN
+#p=0.001132
+
+```
+
+## ANOVA analysis by site - EVEN: ASV and OPEN data
+
+```{r}
+
+oral.samples<-subset(div.data.asv, div.data.asv$site=="oral cavity") 
+stool.samples<-subset(div.data.asv, div.data.asv$site=="stool") 
+
+#oral.samples<-subset(div.data.otu, div.data.otu$site=="oral cavity") # uncomment for OPEN
+#stool.samples<-subset(div.data.otu, div.data.otu$site=="stool") # uncomment for OPEN
+
+#### SALIVA
+
+# anova and post-tuckey for saliva
+
+a1 <- aov(EVEN ~ Disease.status, data=oral.samples)
+summary(a1)
+posthoc <- TukeyHSD(x=a1, 'Disease.status', conf.level=0.95)
+posthoc
+
+model.tables(a1, type="mean")
+#ASV
+#p=control-cancer=0.8370994
+#p=pancreatitis-cancer=0.0288816
+#p=pancreatitis-control=0.0668610
+#OPEN
+#p=control-cancer=0.3163551
+#p=pancreatitis-cancer=0.7244320
+#p=pancreatitis-control=0.3166264
+
+# linear regression for saliva
+fit <- lm(EVEN ~ Disease.status, data=oral.samples) 
+summary(fit)
+anova(fit) 
+#ASV
+#p=0.03845
+#OPEN
+#p=0.1951
+
+#### STOOL
+
+# anova and post-tuckey for saliva
+
+a1 <- aov(EVEN ~ Disease.status, data=stool.samples)
+summary(a1)
+posthoc <- TukeyHSD(x=a1, 'Disease.status', conf.level=0.95)
+posthoc
+
+model.tables(a1, type="mean")
+#ASV
+#p=control-cancer=0.7573848
+#p=pancreatitis-cancer=0.9406788
+#p=pancreatitis-control=0.6480795
+#OPEN
+#p=control-cancer=0.7176990
+#p=pancreatitis-cancer=0.9675156
+#p=pancreatitis-control=0.6720791
+
+# linear regression for saliva
+fit <- lm(EVEN ~ Disease.status, data=stool.samples) #q=0 richness
+summary(fit)
+anova(fit) 
+#ASV
+#p=0.6262
+#OPEN
+#p=0.6287
+
+```
+
+## Linear regression analyses:
+
+```{r}
+
+oral.samples<-subset(div.data.asv, div.data.asv$site=="oral cavity") 
+
+#oral.samples<-subset(div.data.otu, div.data.otu$site=="oral cavity") # uncomment when needed
+
+## the loop:
+
+explore.round<-oral.samples
+explore.round<-explore.round[,c("casecontrol", "smokingstatus", "alcohol_status",   "cpy1", "alc_dd",           
+"alldiab",           "diabcat",           "obese",             "panctype",
+"asthma",            "nasal",             "allacid",          
+"allhburn",          "allrheum",          "allhbp",            "cholesterol",       
+"abmedication",      "antibiotic",        "asparmed",         
+"salicylic.ever",    "paracetamol.ever",  "cholmedication",    "cortmed",           "nsaidmed",          "diabdiet",          "diabin", "diabmed",           "metformin.ever",    "probiot",           "periodontitis",     "recession",         "FHPDAC", "method", "cpy1t", "alc_ddt")] # now everything is oral; take out oral variable from here (14)
+
+
+explore.round <- as.data.frame(lapply(explore.round, as.factor))
+
+explore.round$cpy1<-oral.samples$cpy1
+explore.round$alc_dd<-oral.samples$alc_dd
+
+j=1
+Results<-matrix(NA,35,6) #Number of rows is the number of variables you want to try, # 4 is the number of columns
+for(i in 1:ncol(explore.round))
+{
+  print(i)
+  fit<- try(lm(oral.samples$q.0 ~ explore.round[,i] + as.factor(oral.samples$center) + as.factor(oral.samples$sex) + oral.samples$agec)) # removed status!
+  Results[j,1]<-round(summary(fit)$coefficients[2,1],3)
+  Results[j,2]<-round(summary(fit)$coefficients[2,2],3)   
+  Results[j,3]<-summary(fit)$coefficients[2,4]
+  Results[j,4]<-round(summary(fit)$coefficients[2,1]-1.96*summary(fit)$coefficients[2,2], 3)#CI1_low
+  Results[j,5]<-round(summary(fit)$coefficients[2,1]+1.96*summary(fit)$coefficients[2,2], 3) #CI1_high
+  Results[j,6]<-round(summary(fit)$r.squared, 3)       
+  j<-j+1
+}
+rownames(Results)<-colnames(explore.round[,c(1:35)]) #Don?t include the first column (subject)
+colnames(Results)<-c("coeff" ,"SE", "p-value", "CILow", "CIHigh", "R-squared")
+Results
+
+#to adjust for multiple test
+p.bh<-p.adjust(Results[,3], "BH") #False discovery rate (Benjamini Hochberg)
+Results.adj=data.frame(cbind(Results,p.bh))
+Results.adj
+
+
+### manually
+fit1<-lm(oral.samples$EVEN ~ as.factor(oral.samples$casecontrol) + as.factor(oral.samples$center) + oral.samples$agec + factor(oral.samples$sex) + factor(oral.samples$obese) + oral.samples$diabcat + oral.samples$method + oral.samples$cpy1t+oral.samples$asparmed+oral.samples$periodontitis)
+summary(fit1)
+
+fit1<-lm(oral.samples$q.0 ~ as.factor(oral.samples$sex))
+summary(fit1)
+
+
+fit1<-lm(oral.samples$q.0 ~ oral.samples$agec)
+summary(fit1)
+
+fit1<-lm(oral.samples$q.0 ~ as.factor(oral.samples$method))
+summary(fit1)
+
+# recode reference category for method:
+table(oral.samples$method)
+oral.samples$method2<-ifelse(oral.samples$method=="Listerine 1", "B", oral.samples$method)
+oral.samples$method2<-ifelse(oral.samples$method=="Listerine 2", "A", oral.samples$method2)
+oral.samples$method2<-ifelse(oral.samples$method=="Listerine 3", "C", oral.samples$method2)
+oral.samples$method2<-ifelse(oral.samples$method=="MetaG", "D", oral.samples$method2)
+table(oral.samples$method2)
+
+fit1<-lm(oral.samples$q.0 ~ as.factor(oral.samples$method2))
+summary(fit1)
+
+fit1<-lm(oral.samples$q.0 ~ as.factor(oral.samples$casecontrol) + as.factor(oral.samples$center) + oral.samples$agec + as.factor(oral.samples$sex))
+summary(fit1)
+
+fit1<-lm(oral.samples$q.0 ~ as.factor(oral.samples$method2) + as.factor(oral.samples$center) + oral.samples$agec + as.factor(oral.samples$sex))
+summary(fit1)
+
+```
+
+
+# the same for the stoool samples, to avoid problems, because some variables were not collected in the microbiome study, this causing a problem:
+
+```{r}
+
+stool.samples<-subset(div.data.asv, div.data.asv$site=="stool") 
+
+#stool.samples<-subset(div.data.otu, div.data.otu$site=="stool") 
+
+
+## the loop:
+
+explore.round<-stool.samples
+explore.round<-explore.round[,c("casecontrol", "smokingstatus", "alcohol_status",   "cpy1",          
+"alldiab",           "diabcat",           "obese",             "panctype",
+"asthma",            "nasal",             "allacid",          
+"allhburn",          "allrheum",          "allhbp",            "cholesterol",       
+"abmedication",      "antibiotic",        "asparmed",         
+"salicylic.ever",    "paracetamol.ever",  "cholmedication",    "cortmed",          "diabdiet",          "diabin", "diabmed",           "metformin.ever",    "probiot",           "periodontitis",     "recession",         "FHPDAC", "cpy1t")] # now everything is stool; take out stool variable from here (14)
+
+
+explore.round <- as.data.frame(lapply(explore.round, as.factor))
+
+explore.round$cpy1<-stool.samples$cpy1
+
+j=1
+Results<-matrix(NA,31,6) #Number of rows is the number of variables you want to try, # 4 is the number of columns
+for(i in 1:ncol(explore.round))
+{
+  print(i)
+  fit<- try(lm(stool.samples$q.0 ~ explore.round[,i] + as.factor(stool.samples$center) + as.factor(stool.samples$sex) + stool.samples$agec)) # removed status!
+  Results[j,1]<-round(summary(fit)$coefficients[4,1],3)
+  Results[j,2]<-round(summary(fit)$coefficients[4,2],3)   
+  Results[j,3]<-summary(fit)$coefficients[4,4]
+  Results[j,4]<-round(summary(fit)$coefficients[4,1]-1.96*summary(fit)$coefficients[4,2], 3)#CI1_low
+  Results[j,5]<-round(summary(fit)$coefficients[4,1]+1.96*summary(fit)$coefficients[4,2], 3) #CI1_high
+  Results[j,6]<-round(summary(fit)$r.squared, 3)       
+  j<-j+1
+}
+rownames(Results)<-colnames(explore.round[,c(1:31)]) #Don?t include the first column (subject)
+colnames(Results)<-c("coeff" ,"SE", "p-value", "CILow", "CIHigh", "R-squared")
+Results
+
+#to adjust for multiple test
+p.bh<-p.adjust(Results[,3], "BH") #False discovery rate (Benjamini Hochberg)
+Results.adj=data.frame(cbind(Results,p.bh))
+Results.adj
+
+
+### manually
+fit1<-lm(stool.samples$q.0 ~ as.factor(stool.samples$center))
+summary(fit1)
+
+fit1<-lm(stool.samples$q.0 ~ as.factor(stool.samples$sex))
+summary(fit1)
+
+
+fit1<-lm(stool.samples$q.0 ~ stool.samples$agec)
+summary(fit1)
+
+fit1<-lm(stool.samples$q.0 ~ as.factor(stool.samples$casecontrol) + as.factor(stool.samples$center) + stool.samples$agec + as.factor(stool.samples$sex))
+summary(fit1)
+
+
+```
+
+
+## association of factors individually with richness in saliva and stool samples (unadjusted):
+
+```{r}
+
+## the loop:
+
+explore.round<-oral.samples
+explore.round<-explore.round[,c("casecontrol", "smokingstatus", "alcohol_status",   "cpy1", "alc_dd",           
+"alldiab",           "diabcat",           "obese",             "panctype",
+"asthma",            "nasal",             "allacid",          
+"allhburn",          "allrheum",          "allhbp",            "cholesterol",       
+"abmedication",      "antibiotic",        "asparmed",         
+"salicylic.ever",    "paracetamol.ever",  "cholmedication",    "cortmed",           "nsaidmed",          "diabdiet",          "diabin", "diabmed",           "metformin.ever",    "probiot",           "periodontitis",     "recession",         "FHPDAC", "method", "cpy1t", "alc_ddt")] # now everything is oral; take out oral variable from here (14)
+
+
+explore.round <- as.data.frame(lapply(explore.round, as.factor))
+
+explore.round$cpy1<-oral.samples$cpy1
+explore.round$alc_dd<-oral.samples$alc_dd
+
+j=1
+Results<-matrix(NA,35,6) #Number of rows is the number of variables you want to try, # 4 is the number of columns
+for(i in 1:ncol(explore.round))
+{
+  print(i)
+  fit<- try(lm(oral.samples$q.0 ~ explore.round[,i])) # removed status!
+  Results[j,1]<-round(summary(fit)$coefficients[4,1],3)
+  Results[j,2]<-round(summary(fit)$coefficients[4,2],3)   
+  Results[j,3]<-summary(fit)$coefficients[4,4]
+  Results[j,4]<-round(summary(fit)$coefficients[4,1]-1.96*summary(fit)$coefficients[4,2], 3)#CI1_low
+  Results[j,5]<-round(summary(fit)$coefficients[4,1]+1.96*summary(fit)$coefficients[4,2], 3) #CI1_high
+  Results[j,6]<-round(summary(fit)$r.squared, 3)       
+  j<-j+1
+}
+rownames(Results)<-colnames(explore.round[,c(1:35)]) #Don?t include the first column (subject)
+colnames(Results)<-c("coeff" ,"SE", "p-value", "CILow", "CIHigh", "R-squared")
+Results
+
+#to adjust for multiple test
+p.bh<-p.adjust(Results[,3], "BH") #False discovery rate (Benjamini Hochberg)
+Results.adj=data.frame(cbind(Results,p.bh))
+Results.adj
+
+```
+
+
+# calculate associations with cases-control status adjusted for confounders:
+
+

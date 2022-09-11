@@ -1,0 +1,458 @@
+---
+title: "PERMANOVA"
+author: "Esther Molina"
+date: "1 de diciembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## set the environment:
+
+```{r}
+
+#library(devtools)
+#install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
+
+library(ggplot2, quietly=T)
+library(gplots, quietly=T)
+library(vegan, quietly=T)
+library(ape, quietly=T)
+library(plyr, quietly=T)
+library(grid, quietly=T)
+library(pairwiseAdonis)
+library(cluster)
+library(car)
+
+```
+
+#Load all the needed data, the metadata, the calculated-betadiversity data , and also the data used to obtain beta-diversities.
+
+## START WITH ASV DATA:
+```{r}
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+# the beta-diversity measures:
+
+
+# beta-diversity measures
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_Eligible.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_Eligible.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+# put all these files together to take the Rdata to Linux server:
+
+#save(beta.div.ASV, beta.div.OPEN, div.data.asv, div.data.otu, t.asv.data, t.asv.pooled, t.otu.data, t.otu.pooled, file="R:/Genetic_and_Molecular_Epidemiology/Homes/memolina/PERMANOVA/02122018_AllfilesPermanova.RData" )
+# to open in Linux:
+
+#load(file="/home/memolina/PERMANOVA/02122018_AllfilesPermanova.RData" )
+
+```
+
+
+# get the matrix:
+
+```{r}
+
+names(beta.div.ASV)
+#"Bray_Curtis" "Bray_Curtis.sqrt" "Jaccard_w" "TINA_uw" "TINA_w"          
+names(beta.div.OPEN)
+
+# and for the number of samples:
+dim(beta.div.ASV[[2]])
+# 573 x 573
+dim(beta.div.OPEN[[2]])
+# 580 x 580
+
+# now convert to distance matrix the matrix data file that we obtained:
+dist.betadiv.ASV<-lapply(beta.div.ASV, as.dist)
+dist.betadiv.OPEN<-lapply(beta.div.OPEN, as.dist)
+
+# here we have in a list the 5 beta-diversity indexes calculated 
+# save this as a R data: ALREADY SAVED
+
+#save(dist.betadiv.ASV, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Distances/30112018_16sCalculatedBetasASVEligible.Rdata")
+#save(dist.betadiv.OPEN, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Distances/30112018_16sCalculatedBetasOPENEligible.Rdata")
+
+```
+
+
+
+```{r check the data structure cars}
+
+# check that the data is OK in terms of rownames
+
+#rownames(beta.div.ASV[["TINA_uw"]])
+#rownames(beta.div.OPEN[["TINA_uw"]])
+#rownames(beta.div.ASV[["TINA_w"]])
+#rownames(beta.div.OPEN[["TINA_w"]])
+#rownames(beta.div.ASV[["Bray_Curtis"]])
+#rownames(beta.div.OPEN[["Bray_Curtis"]])
+
+# check the data structure to have it ordered; here check rownames as well
+head(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+head(as.matrix(dist.betadiv.ASV[["TINA_w"]]))
+head(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]]))
+
+head(as.matrix(dist.betadiv.OPEN[["TINA_uw"]]))
+head(as.matrix(dist.betadiv.OPEN[["TINA_w"]]))
+head(as.matrix(dist.betadiv.OPEN[["Bray_Curtis"]]))
+
+# need to order betadiv colnames with div.data.asv ASV
+rownames(div.data.asv)<-as.character(div.data.asv$sample.name)
+div.data.asv <- div.data.asv[rownames(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]])), ]
+
+# now make sure that all distance matrixes have the same order:
+identical(rownames(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]])), rownames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))) # THIS IS TRUE
+rownames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+colnames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+
+
+```
+
+
+# Test whether there are differences in community composition:
+
+########################----------------------------------------####################################
+### TEST DIFFERENCES IN COMMUNITY COMPOSITION
+####################################################################################################
+
+# 1) select distances by site
+
+```{r}
+
+# calculate PCoA with our own beta-diversity calculations and then plot
+# extract the indexes from the list: Bray_Curtis and all other, also by site
+
+Bray <- dist.betadiv.ASV[["Bray_Curtis"]]
+Bray.saliva <- as.dist(as.matrix(Bray)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Bray.stool <- as.dist(as.matrix(Bray)[div.data.asv$site =="stool", div.data.asv$site =="stool"])
+
+Bray.sqrt<- dist.betadiv.ASV[["Bray_Curtis.sqrt"]]
+Bray.sqrt.saliva <- as.dist(as.matrix(Bray.sqrt)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Bray.sqrt.stool <- as.dist(as.matrix(Bray.sqrt)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+Bray.sqrt<- dist.betadiv.ASV[["Bray_Curtis.sqrt"]]
+Bray.sqrt.saliva <- as.dist(as.matrix(Bray.sqrt)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Bray.sqrt.stool <- as.dist(as.matrix(Bray.sqrt)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+Jaccard_w<- dist.betadiv.ASV[["Jaccard_w"]]
+Jaccard_w.saliva <- as.dist(as.matrix(Jaccard_w)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Jaccard_w.stool <- as.dist(as.matrix(Jaccard_w)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+TINA_uw<- dist.betadiv.ASV[["TINA_uw"]]
+TINA_uw.saliva <- as.dist(as.matrix(TINA_uw)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+TINA_uw.stool <- as.dist(as.matrix(TINA_uw)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+TINA_w<- dist.betadiv.ASV[["TINA_w"]]
+TINA_w.saliva <- as.dist(as.matrix(TINA_w)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+TINA_w.stool <- as.dist(as.matrix(TINA_w)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+# double check:
+rownames(as.matrix(TINA_w)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+rownames(as.matrix(TINA_w)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+
+```
+
+# 2) check that the data is ordered:
+
+```{r}
+
+
+# add first the disease status variable:
+div.data.asv$Disease.status <- recode(div.data.asv$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+data.sample <- div.data.asv
+
+# for the OPEN data, uncomment the following:
+
+#div.data.otu$Disease.status <- recode(div.data.otu$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+#data.sample <- div.data.otu
+
+
+# also add the new method variable to distinguish between both methos in the microbiome study:
+data.sample$method.y[data.sample$method=="MetaG" & data.sample$center==8]<-"MetaG2"
+data.sample$method.y[is.na(data.sample$method.y)]<-"MetaG1"
+data.sample$method.y[data.sample$method=="Listerine 1"]<-"Listerine 1"
+data.sample$method.y[data.sample$method=="Listerine 2"]<-"Listerine 2"
+data.sample$method.y[data.sample$method=="Listerine 3"]<-"Listerine 3"
+
+data.sample <- data.sample[rownames(as.matrix(Bray)), ] # order metadata the same as beta-distance matrix
+
+##choose right data set according to sites:
+
+data.sample_ST<-subset(data.sample, data.sample$site=="stool") # metadata for oral samples
+data.sample_OR<-subset(data.sample, data.sample$site=="oral cavity") # metadata for stool samples
+
+
+data.sample_OR <- data.sample[rownames(as.matrix(Bray.saliva)), ] # order oral metadata the same as beta-distance matrix; there are 455 saliva samples
+
+data.sample_ST <- data.sample[rownames(as.matrix(Bray.stool)), ] # order stool metadata the same as beta-distance matrix; there are 118 stool samples
+
+# to double check:
+
+rownames(as.matrix(Bray.stool))
+data.sample_ST$sample.name
+
+rownames(as.matrix(Bray.saliva))
+data.sample_OR$sample.name
+
+# check again that this everything was well ordered
+identical(rownames(as.matrix(Bray.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_uw.saliva)), as.character(data.sample_OR$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_uw.stool)), as.character(data.sample_ST$sample.name)) # TRUE
+identical(rownames(as.matrix(Jaccard_w.stool)), as.character(data.sample_ST$sample.name)) # TRUE
+
+identical(rownames(as.matrix(Bray)), as.character(data.sample$sample.name)) # TRUE
+identical(rownames(as.matrix(Bray)), rownames(data.sample)) # TRUE
+
+
+```
+
+
+# make again sure that ordering was well performed:
+
+```{r}
+# make sure that ordering was well performed; for ASV data:
+identical(rownames(as.matrix(Bray)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(Bray)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Bray.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Bray.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(Bray.sqrt)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(Bray.sqrt)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Bray.sqrt.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Bray.sqrt.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(Jaccard_w)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(Jaccard_w)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Jaccard_w.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Jaccard_w.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(TINA_uw)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(TINA_uw)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(TINA_uw.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_uw.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(TINA_w)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(TINA_w)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(TINA_w.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_w.stool)), as.character(data.sample_ST$sample.name))
+
+
+```
+
+# TINA by site
+
+```{r}
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_EligibleSALIVA.Rdata")
+dist.betadiv.saliva<-lapply(beta.div, as.dist)
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_EligibleSTOOL.Rdata")
+dist.betadiv.stool<-lapply(beta.div, as.dist)
+
+# put all these files together to take the Rdata to Linux server:
+#save(dist.betadiv.saliva, dist.betadiv.stool, file="R:/Genetic_and_Molecular_Epidemiology/Homes/memolina/PERMANOVA/02122018_AllTINAsitePermanova.RData" )
+# to open in Linux:
+#load(file="/home/memolina/PERMANOVA/02122018_AllTINAsitePermanova.RData" )
+
+
+TINA_uw.saliva2<- dist.betadiv.saliva[["TINA_uw"]]
+TINA_w.saliva2<- dist.betadiv.saliva[["TINA_w"]]
+
+TINA_uw.stool2<- dist.betadiv.stool[["TINA_uw"]]
+TINA_w.stool2<- dist.betadiv.stool[["TINA_w"]]
+
+# reorder to have the samples as data.sample:
+
+TINA_uw.saliva2<-as.dist(as.matrix(TINA_uw.saliva2)[rownames(data.sample_OR), rownames(data.sample_OR)])
+TINA_w.saliva2<-as.dist(as.matrix(TINA_w.saliva2)[rownames(data.sample_OR), rownames(data.sample_OR)])
+
+TINA_uw.stool2<-as.dist(as.matrix(TINA_uw.stool2)[rownames(data.sample_ST), rownames(data.sample_ST)])
+TINA_w.stool2<-as.dist(as.matrix(TINA_w.stool2)[rownames(data.sample_ST), rownames(data.sample_ST)])
+
+# make sure that ordering was well performed
+identical(rownames(as.matrix(TINA_uw.stool2)), as.character(data.sample_ST$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_w.stool2)), as.character(data.sample_ST$sample.name)) # TRUE
+
+identical(rownames(as.matrix(TINA_uw.saliva2)), as.character(data.sample_OR$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_w.saliva2)), as.character(data.sample_OR$sample.name)) # TRUE
+
+```
+
+
+## Run the permanova analyses 
+
+This script starts calculating differences in community composition based on the distance dissimilarities. Permanova is applied separate to 5 distances and 3 sites. We start with the univariate analysis, that is crude, without controlling for any variable. Then we add potential confounders sequentually.
+We have used the adonis() function from the vegan library which fits linear models to distance matrices and uses a permutation test with Pseudo F-ratios. 
+
+
+```{r PERMANOVA: univariate (Model 1)}
+
+
+perm<-how(nperm=9999) # set the number of permutations to 10,000
+
+# global permanova for cases and controls combined:
+
+mylist<-list(a=Bray, b=Bray.sqrt, c=Jaccard_w, d=TINA_uw, e=TINA_w)
+res<-lapply(mylist, function(x) adonis(x ~ as.factor(Disease.status), data=data.sample, permutations=perm))
+res
+a<-cbind(res$a[[1]][[1,'R2']], res$a[[1]][[1,'Pr(>F)']])
+b<-cbind(res$b[[1]][[1,'R2']], res$b[[1]][[1,'Pr(>F)']])
+c<-cbind(res$c[[1]][[1,'R2']], res$c[[1]][[1,'Pr(>F)']])
+d<-cbind(res$d[[1]][[1,'R2']], res$d[[1]][[1,'Pr(>F)']])
+e<-cbind(res$e[[1]][[1,'R2']], res$e[[1]][[1,'Pr(>F)']])
+Results<-rbind(a,b,c,d,e)
+rownames(Results)<-c("Bray", "Bray.sqrt", "Jaccard_w", "TINA_uw", "TINA_w")#Don?t include the first column (subject)
+colnames(Results)<-c("R-squared", "p-value")
+Results
+
+# to double check:
+#adonis(Bray ~ as.factor(site), data=data.sample, permutations=perm)
+#adonis(TINA_uw ~ as.factor(site), data=data.sample, permutations=perm)
+
+
+# for saliva samples:
+
+mylist<-list(a=Bray.saliva, b=Bray.sqrt.saliva, c=Jaccard_w.saliva, d=TINA_uw.saliva, e=TINA_w.saliva, f=TINA_uw.saliva2, g=TINA_w.saliva2)
+res<-lapply(mylist, function(x) adonis(x ~ agec + as.factor(sex) + as.factor(method.y) + as.factor(smokingstatus) + as.factor(Disease.status), data=data.sample_OR, permutations=perm))
+res
+a<-cbind(res$a[[1]][[5,'R2']], res$a[[1]][[5,'Pr(>F)']]) # changed to 4 as we want to extract the 4th coeff for R2 and PF
+b<-cbind(res$b[[1]][[5,'R2']], res$b[[1]][[5,'Pr(>F)']])
+c<-cbind(res$c[[1]][[5,'R2']], res$c[[1]][[5,'Pr(>F)']])
+d<-cbind(res$d[[1]][[5,'R2']], res$d[[1]][[5,'Pr(>F)']])
+e<-cbind(res$e[[1]][[5,'R2']], res$e[[1]][[5,'Pr(>F)']])
+f<-cbind(res$d[[1]][[5,'R2']], res$d[[1]][[5,'Pr(>F)']])
+g<-cbind(res$e[[1]][[5,'R2']], res$e[[1]][[5,'Pr(>F)']])
+Results<-rbind(a,b,c,d,e,f,g)
+rownames(Results)<-c("Bray", "Bray.sqrt", "Jaccard_w", "TINA_uw", "TINA_w", "TINA_uw2", "TINA_w2")#Don?t include the first column (subject)
+colnames(Results)<-c("R-squared", "p-value")
+Results
+
+adonis(Bray.saliva ~ agec + as.factor(sex) + as.factor(center) + as.factor(Disease.status), data=saliva.div.dataE, permutations=perm)
+
+# for stool samples:
+
+mylist<-list(a=Bray.stool, b=Bray.sqrt.stool, c=Jaccard_w.stool, d=TINA_uw.stool, e=TINA_w.stool, f=TINA_uw.stool2, g=TINA_w.stool2)
+res<-lapply(mylist, function(x) adonis(x ~ agec + as.factor(sex) + as.factor(center) +  as.factor(metformin.ever) + as.factor(smokingstatus) + as.factor(Disease.status), data=data.sample_ST, permutations=perm))
+res
+a<-cbind(res$a[[1]][[6,'R2']], res$a[[1]][[6,'Pr(>F)']])
+b<-cbind(res$b[[1]][[6,'R2']], res$b[[1]][[6,'Pr(>F)']])
+c<-cbind(res$c[[1]][[6,'R2']], res$c[[1]][[6,'Pr(>F)']])
+d<-cbind(res$d[[1]][[6,'R2']], res$d[[1]][[6,'Pr(>F)']])
+e<-cbind(res$e[[1]][[6,'R2']], res$e[[1]][[6,'Pr(>F)']])
+f<-cbind(res$d[[1]][[6,'R2']], res$d[[1]][[6,'Pr(>F)']])
+g<-cbind(res$e[[1]][[6,'R2']], res$e[[1]][[6,'Pr(>F)']])
+Results<-rbind(a,b,c,d,e,f,g)
+rownames(Results)<-c("Bray", "Bray.sqrt", "Jaccard_w", "TINA_uw", "TINA_w", "TINA_uw2", "TINA_u2")#Don?t include the first column (subject)
+colnames(Results)<-c("R-squared", "p-value")
+Results
+
+############## ANALYSES BY SITE #####################################
+#### extract the data to make pair-wise comparisons in parmanova ####
+
+# PC vs chronic P (removing pancreatitiss) 
+data.sample_ORWO<-subset(data.sample_OR, data.sample_OR$Disease.status!= "pancreatitis")
+
+
+# permanova for saliva
+
+saliva.Bray <- as.dist(as.matrix(Bray)[data.sample$site == "oral cavity" & data.sample$Disease.status!= "pancreatitis", data.sample$site == "oral cavity" & data.sample$Disease.status != "pancreatitis"])
+saliva.Bray.sqrt <- as.dist(as.matrix(Bray.sqrt)[data.sample$site == "oral cavity" & data.sample$Disease.status!= "pancreatitis", data.sample$site == "oral cavity" & data.sample$Disease.status != "pancreatitis"])
+saliva.Jaccard <- as.dist(as.matrix(Jaccard_w)[data.sample$site == "oral cavity" & data.sample$Disease.status!= "pancreatitis", data.sample$site == "oral cavity" & data.sample$Disease.status != "pancreatitis"])
+saliva.TINAuw <- as.dist(as.matrix(TINA_uw)[data.sample$site == "oral cavity" & data.sample$Disease.status!= "pancreatitis", data.sample$site == "oral cavity" & data.sample$Disease.status != "pancreatitis"])
+saliva.TINAw <- as.dist(as.matrix(TINA_w)[data.sample$site == "oral cavity" & data.sample$Disease.status!= "pancreatitis", data.sample$site == "oral cavity" & data.sample$Disease.status != "pancreatitis"])
+saliva.TINAuw2 <- as.dist(as.matrix(TINA_uw.saliva2)[data.sample_OR$Disease.status!= "pancreatitis", data.sample_OR$Disease.status != "pancreatitis"])
+saliva.TINAw2 <- as.dist(as.matrix(TINA_w.saliva2)[data.sample_OR$Disease.status!= "pancreatitis", data.sample_OR$Disease.status != "pancreatitis"])
+
+# check order
+identical(rownames(as.matrix(saliva.Bray)), as.character(data.sample_ORWO$sample.name))
+identical(rownames(as.matrix(saliva.Bray.sqrt)), as.character(data.sample_ORWO$sample.name))
+identical(rownames(as.matrix(saliva.Jaccard)), as.character(data.sample_ORWO$sample.name)) 
+identical(rownames(as.matrix(saliva.TINAuw)), as.character(data.sample_ORWO$sample.name)) 
+identical(rownames(as.matrix(saliva.TINAw)), as.character(data.sample_ORWO$sample.name)) 
+identical(rownames(as.matrix(saliva.TINAuw2)), as.character(data.sample_ORWO$sample.name)) 
+identical(rownames(as.matrix(saliva.TINAw2)), as.character(data.sample_ORWO$sample.name)) 
+
+mylist<-list(a=saliva.Bray, b=saliva.Bray.sqrt, c=saliva.Jaccard, d=saliva.TINAuw, e=saliva.TINAw, f=saliva.TINAuw2, g=saliva.TINAw2)
+res<-lapply(mylist, function(x) adonis(x ~ agec + as.factor(sex) + as.factor(method.y) + as.factor(smokingstatus) + as.factor(Disease.status), data=data.sample_ORWO, permutations=perm))
+res
+a<-cbind(res$a[[1]][[5,'R2']], res$a[[1]][[5,'Pr(>F)']])
+b<-cbind(res$b[[1]][[5,'R2']], res$b[[1]][[5,'Pr(>F)']])
+c<-cbind(res$c[[1]][[5,'R2']], res$c[[1]][[5,'Pr(>F)']])
+d<-cbind(res$d[[1]][[5,'R2']], res$d[[1]][[5,'Pr(>F)']])
+e<-cbind(res$e[[1]][[5,'R2']], res$e[[1]][[5,'Pr(>F)']])
+f<-cbind(res$d[[1]][[5,'R2']], res$d[[1]][[5,'Pr(>F)']])
+g<-cbind(res$e[[1]][[5,'R2']], res$e[[1]][[5,'Pr(>F)']])
+Results<-rbind(a,b,c,d,e,f,g)
+rownames(Results)<-c("Bray", "Bray.sqrt", "Jaccard_w", "TINA_uw", "TINA_w", "TINA_uw2", "TINA_w2")#Don?t include the first column (subject)
+colnames(Results)<-c("R-squared", "p-value")
+Results
+
+
+# permanova for stools:
+
+data.sample_STWO<-subset(data.sample_ST, data.sample_ST$Disease.status!= "cases")
+
+
+stool.Bray <- as.dist(as.matrix(Bray)[data.sample$site == "stool" & data.sample$Disease.status!="cases", data.sample$site == "stool" & data.sample$Disease.status!= "cases"])
+stool.Bray.sqrt <- as.dist(as.matrix(Bray.sqrt)[data.sample$site == "stool" & data.sample$Disease.status!= "cases", data.sample$site == "stool" & data.sample$Disease.status != "cases"])
+stool.Jaccard <- as.dist(as.matrix(Jaccard_w)[data.sample$site == "stool" & data.sample$Disease.status!= "cases", data.sample$site == "stool" & data.sample$Disease.status != "cases"])
+stool.TINAuw <- as.dist(as.matrix(TINA_uw)[data.sample$site == "stool" & data.sample$Disease.status!= "cases", data.sample$site == "stool" & data.sample$Disease.status != "cases"])
+stool.TINAw <- as.dist(as.matrix(TINA_w)[data.sample$site == "stool" & data.sample$Disease.status!= "cases", data.sample$site == "stool" & data.sample$Disease.status != "cases"])
+stool.TINAuw2 <- as.dist(as.matrix(TINA_uw.stool2)[data.sample_ST$Disease.status!= "cases", data.sample_ST$Disease.status != "cases"])
+stool.TINAw2 <- as.dist(as.matrix(TINA_w.stool2)[data.sample_ST$Disease.status!= "cases", data.sample_ST$Disease.status != "cases"])
+
+# check order
+identical(rownames(as.matrix(stool.Bray)), as.character(data.sample_STWO$sample.name))
+identical(rownames(as.matrix(stool.Bray.sqrt)), as.character(data.sample_STWO$sample.name))
+identical(rownames(as.matrix(stool.Jaccard)), as.character(data.sample_STWO$sample.name)) 
+identical(rownames(as.matrix(stool.TINAuw)), as.character(data.sample_STWO$sample.name)) 
+identical(rownames(as.matrix(stool.TINAw)), as.character(data.sample_STWO$sample.name)) 
+identical(rownames(as.matrix(stool.TINAuw2)), as.character(data.sample_STWO$sample.name)) 
+identical(rownames(as.matrix(stool.TINAw2)), as.character(data.sample_STWO$sample.name)) 
+
+mylist<-list(a=stool.Bray, b=stool.Bray.sqrt, c=stool.Jaccard, d=stool.TINAuw, e=stool.TINAw, f=stool.TINAuw2, g=stool.TINAw2)
+res<-lapply(mylist, function(x) adonis(x ~ agec + as.factor(sex) + as.factor(center) + as.factor(metformin.ever) + as.factor(smokingstatus) + as.factor(Disease.status), data=data.sample_STWO, permutations=perm))
+res
+a<-cbind(res$a[[1]][[6,'R2']], res$a[[1]][[6,'Pr(>F)']])
+b<-cbind(res$b[[1]][[6,'R2']], res$b[[1]][[6,'Pr(>F)']])
+c<-cbind(res$c[[1]][[6,'R2']], res$c[[1]][[6,'Pr(>F)']])
+d<-cbind(res$d[[1]][[6,'R2']], res$d[[1]][[6,'Pr(>F)']])
+e<-cbind(res$e[[1]][[6,'R2']], res$e[[1]][[6,'Pr(>F)']])
+Results<-rbind(a,b,c,d,e,f,g)
+rownames(Results)<-c("Bray", "Bray.sqrt", "Jaccard_w", "TINA_uw", "TINA_w", "TINA_uw2", "TINA_w2")#Don?t include the first column (subject)
+colnames(Results)<-c("R-squared", "p-value")
+Results
+
+# now repeat code from line 322 to 376
+```
+
+This analysis reveals that there are differences in community composition between cases and controls in stools, though not so in salivas.
+Now do the same for a model adjusted for age, sex and center (Model 2):
+
+

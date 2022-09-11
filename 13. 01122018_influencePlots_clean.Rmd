@@ -1,0 +1,390 @@
+---
+title: "influencing factors"
+author: "Esther Molina"
+date: "1 de diciembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# set the environment:
+
+```{r}
+library(ggplot2, quietly=T)
+library(gplots, quietly=T)
+library(vegan, quietly=T)
+library(ape, quietly=T)
+library(plyr, quietly=T)
+library(grid, quietly=T)
+library(car)
+
+```
+
+
+# load the data:
+
+## START WITH ASV DATA:
+```{r}
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+# the beta-diversity measures:
+
+
+# beta-diversity measures
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_Eligible.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_Eligible.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+```
+
+# prepare the data:
+```{r}
+
+# OTU data is duplRows2.sumElegib  with sample names on rows
+abund_table<-t.asv.pooled
+data.sample<-div.data.asv
+#Just a check to ensure that the samples in meta_table are in the same order as in abund_table
+
+data.sample$method.y[data.sample$method=="MetaG" & data.sample$center==8]<-"MetaG2"
+data.sample$method.y[is.na(data.sample$method.y)]<-"MetaG1"
+data.sample$method.y[data.sample$method=="Listerine 1"]<-"Listerine 1"
+data.sample$method.y[data.sample$method=="Listerine 2"]<-"Listerine 2"
+data.sample$method.y[data.sample$method=="Listerine 3"]<-"Listerine 3"
+
+data.sample$Disease.status <- recode(data.sample$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+rownames(data.sample)<-as.character(data.sample$sample.name)
+data.sample<-data.sample[rownames(abund_table),]
+
+identical(rownames(abund_table), rownames(data.sample)) # TRUE
+
+#Convert to relative frequencies
+abund_table<-abund_table/rowSums(abund_table)
+
+###Use adonis to find significant environmental variables; 
+
+#first select the metadata we want to check, subsetting by site:
+names(data.sample)
+
+meta_imp<-data.sample[,c("site","MetaG", "center",            "casecontrol",       "sex",  "agec",              "smokingstatus", "cpy1", "alcohol_status", "alc_dd",            "alldiab",           "diabcat",           "obese",  "panctype",          "asthma",            "nasal",             "allacid",          "allhburn",          "allrheum",          "allhbp",            "cholesterol",      "abmedication",      "antibiotic",        "asparmed",          "salicylic.ever",  "paracetamol.ever",  "cholmedication",    "cortmed",           "nsaidmed",       "diabdiet",          "diabin",            "diabmed",           "metformin.ever", "probiot",           "periodontitis",     "recession",         "FHPDAC",   "method", "cpy1t",             "alc_ddt", "Disease.status", "sample.name", "method.y")] # for global estimates
+meta_imp<-as.data.frame(lapply(meta_imp, as.factor))
+meta_imp$alc_dd<-as.factor(data.sample$alc_dd)
+meta_imp$agec<-as.factor(data.sample$agec)
+meta_imp$cpy1<-as.factor(data.sample$cpy1)
+
+data.sample.OR<-subset(meta_imp, meta_imp$site=="oral cavity") # for saliva 
+data.sample.ST<-subset(meta_imp, meta_imp$site=="stool") # for stools 
+
+# also select the abundance data by site for the controls only:
+
+df1.saliva<-subset(data.sample.OR, data.sample.OR$Disease.status=="control")
+rownames(df1.saliva)<-df1.saliva$sample.name
+abund_table.saliva<-abund_table[ rownames(df1.saliva), ]
+
+identical(rownames(abund_table.saliva), rownames(df1.saliva)) # TRUE
+
+df1.stool<-subset(data.sample.ST, data.sample.ST$Disease.status=="control")
+rownames(df1.stool)<-df1.stool$sample.name
+abund_table.stool<-abund_table[ rownames(df1.stool), ]
+
+identical(rownames(abund_table.stool), rownames(df1.stool)) # TRUE
+
+```
+
+
+# to not restrict to the controls:
+
+```{r}
+
+data.sample.OR<-subset(meta_imp, meta_imp$site=="oral cavity") # for saliva 
+data.sample.ST<-subset(meta_imp, meta_imp$site=="stool") # for stools 
+
+# also select the abundance data by site for the controls only:
+df1.saliva<-data.sample.OR
+rownames(df1.saliva)<-df1.saliva$sample.name
+abund_table.saliva<-abund_table[ rownames(df1.saliva), ]
+
+identical(rownames(abund_table.saliva), rownames(df1.saliva)) # TRUE
+
+df1.stool<-data.sample.ST
+rownames(df1.stool)<-df1.stool$sample.name
+abund_table.stool<-abund_table[ rownames(df1.stool), ]
+
+identical(rownames(abund_table.stool), rownames(df1.stool)) # TRUE
+
+```
+
+
+# NMDS scaling for some varibles of interest:
+
+Also perform NMDS and corresponding distances to also explore/confirm whether there are specific patterns associated with community composition in stools and saliva.
+
+```{r plot NMDS}
+
+?nmds
+dis=vegdist(log10(abund_table.saliva+1))
+nm=metaMDS(abund_table.saliva)
+plot(nm)
+plot.data=data.frame(nm$points, stringsAsFactors = F)
+plot(x=plot.data$MDS1, y=plot.data$MDS2 )
+# add to plot data my other variables
+plot.data<-merge(plot.data, df1.saliva, by.x="row.names", by.y="sample.name")
+plot.data$center<-factor(plot.data$center, levels=c(0,1,2,3, 8,13), labels=c("H Mar", "H. S Pau", "Vall d`Hebron", "Elche", "H RyC", "TUM"))
+plot.data$smokingstatus<-factor(plot.data$smokingstatus, levels=c(0,1,2,3), labels=c("never", "occasional", "former", "current"))
+plot.data$alcohol_status<-factor(plot.data$alcohol_status, levels=c(0,1), labels=c("never", "ever"))
+plot.data$obese<-factor(plot.data$obese, levels=c(0,1), labels=c("non-obese", "obese"))
+plot.data$periodontitis<-factor(plot.data$periodontitis, levels=c(0,1), labels=c("no", "yes"))
+plot.data$recession<-factor(plot.data$recession, levels=c(0,1), labels=c("no", "yes"))
+plot.data$FHPDAC<-factor(plot.data$FHPDAC, levels=c(0,1), labels=c("no", "yes"))
+#plot.data$method.y<-factor(plot.data$FHPDAC, labels=c("Listerine 1", "Listerine 2", "Listerine 3", "MetaG1", "MetaG2"))
+plot.data$diabcat<-factor(plot.data$diabcat, levels=c(0,1,2), labels=c("no", "yes <2y", "yes >2y"))
+
+# get the plot:
+require(gridExtra)
+setwd("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Plots/")
+pdf("02122018_16s_saliva_NMDS(all)_OPEN_WOwrongsample.pdf", width=15, height=15)
+par(mfrow=c(4,2))
+
+p1<- ggplot(plot.data, aes(x=MDS1, y=MDS2, col=center, label=plot.data$Row.names)) +
+ geom_point() +
+ stat_ellipse() +
+ theme_bw() +
+ labs(title = "NMDS Plot by center (all)")
+ 
+p2<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=smokingstatus)) +
+ geom_point() +
+ stat_ellipse() +
+ theme_bw() +
+ labs(title = "NMDS Plot by smoking (all)")
+
+p3<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=method.y)) +
+ geom_point() +
+ stat_ellipse() +
+ theme_bw() +
+ labs(title = "NMDS Plot by method (all)")
+
+p4<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=periodontitis)) +
+ geom_point() +
+ stat_ellipse() +
+ theme_bw() +
+ labs(title = "NMDS Plot by periodontitis (all)")
+
+p5<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=obese)) +
+ geom_point() +
+ stat_ellipse() +
+ theme_bw() +
+ labs(title = "NMDS Plot by obesity (all)")
+
+p6<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=diabcat)) +
+ geom_point() +
+ stat_ellipse() +
+ theme_bw() +
+ labs(title = "NMDS Plot by diabetes (all)")
+
+grid.arrange(p1,p2,p3,p4,p5,p6)
+
+dev.off()
+
+# do the same for the stool samples:
+?nmds
+dis=vegdist(log10(abund_table.stool+1))
+nm=metaMDS(abund_table.stool)
+plot(nm)
+plot.data=data.frame(nm$points, stringsAsFactors = F)
+plot(x=plot.data$MDS1, y=plot.data$MDS2 )
+# add to plot data my other variables
+plot.data<-merge(plot.data, df1.stool, by.x="row.names", by.y="sample.name")
+plot.data$obese<-factor(plot.data$obese, levels=c(0,1), labels=c("non-obese", "obese"))
+plot.data$periodontitis<-factor(plot.data$periodontitis, levels=c(0,1), labels=c("no", "yes"))
+plot.data$recession<-factor(plot.data$recession, levels=c(0,1), labels=c("no", "yes"))
+plot.data$FHPDAC<-factor(plot.data$FHPDAC, levels=c(0,1), labels=c("no", "yes"))
+plot.data$metformin.ever<-factor(plot.data$metformin.ever, levels=c(0,1,2), labels=c("no diabetes & no oral", "yes metformin", "no metformin"))
+plot.data$center<-factor(plot.data$center, levels=c(0,1,2,3, 8,13), labels=c("H Mar", "H. S Pau", "Vall d`Hebron", "Elche", "H RyC", "TUM"))
+plot.data$smokingstatus<-factor(plot.data$smokingstatus, levels=c(0,1,2,3), labels=c("never", "occasional", "former", "current"))
+plot.data$alcohol_status<-factor(plot.data$alcohol_status, levels=c(0,1), labels=c("never", "ever"))
+plot.data$diabcat<-factor(plot.data$diabcat, levels=c(0,1,2), labels=c("no", "yes <2y", "yes >2y"))
+
+plot.data$metformin.ever.yy<-NA
+plot.data$metformin.ever.yy<-ifelse(is.na(plot.data$metformin.ever.yy) & plot.data$alldiab==0, 0, NA)
+plot.data$metformin.ever.yy<-ifelse(is.na(plot.data$metformin.ever.yy) & plot.data$metformin.ever=="yes metformin", 1, 2)
+plot.data$metformin.ever.yy<-ifelse(plot.data$alldiab==0, 0, plot.data$metformin.ever.yy)
+plot.data$metformin.ever.yy<-factor(plot.data$metformin.ever.yy, levels=c(0,1,2), labels=c("no diabetes", "yes metformin", "no metformin"))
+
+# get the plot:
+require(gridExtra)
+setwd("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Plots/")
+pdf("02122018_16s_stool_NMDS(controls)_OPEN.pdf", width=15, height=15)
+par(mfrow=c(4,2))
+
+p1<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=metformin.ever.yy)) +
+  geom_point() +
+  stat_ellipse() +
+  theme_bw() +
+  labs(title = "NMDS Plot by metformin (controls)")
+
+p2<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=diabcat)) +
+  geom_point() +
+  stat_ellipse() +
+  theme_bw() +
+  labs(title = "NMDS Plot by diabetes (controls)")
+
+p3<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=obese)) +
+  geom_point() +
+  stat_ellipse() +
+  theme_bw() +
+  labs(title = "NMDS Plot by obesity (controls)")
+
+p4<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=FHPDAC)) +
+  geom_point() +
+  stat_ellipse() +
+  theme_bw() +
+  labs(title = "NMDS Plot by family history (controls)")
+
+p5<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=smokingstatus)) +
+  geom_point() +
+  stat_ellipse() +
+  theme_bw() +
+  labs(title = "NMDS Plot by smoking (controls)")
+
+p6<-ggplot(plot.data, aes(x=MDS1, y=MDS2, col=center)) +
+  geom_point() +
+  stat_ellipse() +
+  theme_bw() +
+  labs(title = "NMDS Plot by center (controls)")
+
+
+grid.arrange(p1,p2,p3,p4,p5,p6)
+
+dev.off()
+
+```
+
+## repeat the NDMs plots for OPEN DATA:
+
+```{r}
+
+# OTU data is duplRows2.sumElegib  with sample names on rows
+abund_table<-t.otu.pooled
+data.sample<-div.data.otu
+#Just a check to ensure that the samples in meta_table are in the same order as in abund_table
+
+data.sample$method.y[data.sample$method=="MetaG" & data.sample$center==8]<-"MetaG2"
+data.sample$method.y[is.na(data.sample$method.y)]<-"MetaG1"
+data.sample$method.y[data.sample$method=="Listerine 1"]<-"Listerine 1"
+data.sample$method.y[data.sample$method=="Listerine 2"]<-"Listerine 2"
+data.sample$method.y[data.sample$method=="Listerine 3"]<-"Listerine 3"
+
+data.sample$Disease.status <- recode(data.sample$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+rownames(data.sample)<-as.character(data.sample$sample.name)
+data.sample<-data.sample[rownames(abund_table),]
+
+identical(rownames(abund_table), rownames(data.sample)) # TRUE
+
+#Convert to relative frequencies
+abund_table<-abund_table/rowSums(abund_table)
+
+###Use adonis to find significant environmental variables; 
+
+#first select the metadata we want to check, subsetting by site:
+names(data.sample)
+
+meta_imp<-data.sample[,c("site","MetaG", "center",            "casecontrol",       "sex",  "agec",              "smokingstatus", "cpy1", "alcohol_status", "alc_dd",            "alldiab",           "diabcat",           "obese",  "panctype",          "asthma",            "nasal",             "allacid",          "allhburn",          "allrheum",          "allhbp",            "cholesterol",      "abmedication",      "antibiotic",        "asparmed",          "salicylic.ever",  "paracetamol.ever",  "cholmedication",    "cortmed",           "nsaidmed",       "diabdiet",          "diabin",            "diabmed",           "metformin.ever", "probiot",           "periodontitis",     "recession",         "FHPDAC",   "method", "cpy1t",             "alc_ddt", "Disease.status", "sample.name", "method.y")] # for global estimates
+meta_imp<-as.data.frame(lapply(meta_imp, as.factor))
+meta_imp$alc_dd<-as.factor(data.sample$alc_dd)
+meta_imp$agec<-as.factor(data.sample$agec)
+meta_imp$cpy1<-as.factor(data.sample$cpy1)
+
+data.sample.OR<-subset(meta_imp, meta_imp$site=="oral cavity") # for saliva 
+data.sample.ST<-subset(meta_imp, meta_imp$site=="stool") # for stools 
+
+
+```
+
+# to not restrict to the controls:
+
+```{r}
+
+data.sample.OR<-subset(meta_imp, meta_imp$site=="oral cavity") # for saliva 
+data.sample.ST<-subset(meta_imp, meta_imp$site=="stool") # for stools 
+
+# also select the abundance data by site for the controls only:
+df1.saliva<-data.sample.OR
+rownames(df1.saliva)<-df1.saliva$sample.name
+abund_table.saliva<-abund_table[ rownames(df1.saliva), ]
+
+identical(rownames(abund_table.saliva), rownames(df1.saliva)) # TRUE
+
+df1.stool<-data.sample.ST
+rownames(df1.stool)<-df1.stool$sample.name
+abund_table.stool<-abund_table[ rownames(df1.stool), ]
+
+identical(rownames(abund_table.stool), rownames(df1.stool)) # TRUE
+
+```
+
+# restrict to the controls:
+
+
+```{r}
+
+data.sample.OR<-subset(meta_imp, meta_imp$site=="oral cavity") # for saliva 
+data.sample.ST<-subset(meta_imp, meta_imp$site=="stool") # for stools 
+
+# also select the abundance data by site for the controls only:
+
+df1.saliva<-subset(data.sample.OR, data.sample.OR$Disease.status=="control")
+rownames(df1.saliva)<-df1.saliva$sample.name
+abund_table.saliva<-abund_table[ rownames(df1.saliva), ]
+
+identical(rownames(abund_table.saliva), rownames(df1.saliva)) # TRUE
+
+df1.stool<-subset(data.sample.ST, data.sample.ST$Disease.status=="control")
+rownames(df1.stool)<-df1.stool$sample.name
+abund_table.stool<-abund_table[ rownames(df1.stool), ]
+
+identical(rownames(abund_table.stool), rownames(df1.stool)) # TRUE
+
+
+```
+
+# remove the wird sample from OPEN? MMPC27135402OR it belongs to a case (157011102); do not restrict to the controls
+
+```{r}
+
+data.sample.OR<-subset(meta_imp, meta_imp$site=="oral cavity" & meta_imp$sample.name!="MMPC27135402OR") # for saliva 
+
+# also select the abundance data by site for the controls only:
+df1.saliva<-data.sample.OR
+rownames(df1.saliva)<-df1.saliva$sample.name
+abund_table.saliva<-abund_table[ rownames(df1.saliva), ]
+
+identical(rownames(abund_table.saliva), rownames(df1.saliva)) # TRUE
+
+
+
+```
+

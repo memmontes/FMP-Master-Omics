@@ -1,0 +1,741 @@
+---
+title: "Beta-diversity on the pooled samples"
+author: "Esther Molina"
+date: "30 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## BE CAREFUL with the name of the file: Rdata or RData. This gave some trouble!!||||||||||||
+
+## set the environment:
+
+```{r}
+
+library("vegan")
+library("phyloseq")
+
+# Load also these packages
+library("foreach")
+library("doMC") ##
+library("iterators")
+library("doParallel")
+library("parallel")
+library("Matrix")
+library("bigmemory") ##
+library("biganalytics")
+library("gRbase")
+library("gplots")
+library("ggplot2")
+library("grid")
+library("gridExtra")
+library("data.table")
+library("plyr")
+library("ape")
+library("RColorBrewer")
+
+
+```
+
+
+# load the data
+## BE CAREFUL with the name of the file: Rdata or RData. This gave some trouble!!||||||||||||
+
+
+```{r}
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+# load the otudata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+```
+
+
+
+# the beta-diversity calculation in LINUX:
+# Need the input as matrix and taxa in rows and samples in columns:
+## BE CAREFUL with the name of the file: Rdata or RData. This gave some trouble!!||||||||||||
+
+# for the ASV data:
+
+```{r to be run in venus}
+
+###---------------------------------------------------------------------------###
+###---------------------------------------------------------------------------###
+###---------------------------------------------------------------------------###
+# Sebastian codes:
+
+#!/usr/bin/Rscript
+################################################################################
+#Project: Pancreatic Cancer Microbiome
+#
+#Calculate pairwise community (dis)similarities for 16S data.
+#
+#2017-09-26
+#sebastian.schmidt@embl.de
+################################################################################
+
+
+################################################################################
+################################################################################
+#Source convenience functions
+source("https://raw.githubusercontent.com/defleury/Schmidt_et_al_2016_community_similarity/master/functions.community_similarity.R")
+
+
+# for the linux server
+PARAM <- list()
+PARAM$folder.R <- getwd()
+PARAM$folder.base <- paste0(PARAM$folder.R,"/PARAM/")
+PARAM$folder.data <- paste0(PARAM$folder.base)
+PARAM$use.cores <- 20
+
+################################################################################
+################################################################################
+
+
+################################################################################
+################################################################################
+#Load data
+load(paste0(PARAM$folder.data, "27112018_ASVfinalMatrix_pooledEligible.RData"))
+
+
+#### for the ASV data:
+
+# this was for the new 16sdata (venus)
+ot <- as.data.frame(t(t.asv.pooled)) # samples in columns and OTUs in rows
+
+#Normalize to relative abundances
+ot <- t(t(ot) / colSums(ot)) # with noramlization I get the total number of reads in evry sample decided by the total number of reads each sample had. TO BE RUN ONLY FOR BETA-DIVERSITY CALCULATED. OTHERWISE COMMENT
+# t is now the total number of reads per sample in matrix format; this is what we will use for obtaining the diversity measures
+# the same was done for the keep.taxa data from the microbiome study, that I am going to use to redo the example
+# the keep.taxa.clean data matrix is to be used to this
+## see above for the MOTU data analysis in LINUX
+
+
+################################################################################
+################################################################################
+
+
+################################################################################
+################################################################################
+#Calculate sample dissimilarities
+#-> note: all metrics are calculated as similarities, not dissimilarities
+beta.div <- list();
+
+#Bray-Curtis
+beta.div[["Bray_Curtis"]] <- community.similarity.par(ot, distance="bray_curtis", use.cores=4)
+
+#Bray-Curtis on sqrt-transformed data
+beta.div[["Bray_Curtis.sqrt"]] <- community.similarity.par(sqrt(ot), distance="bray_curtis", use.cores=4)
+
+#Weighted Jaccard
+beta.div[["Jaccard_w"]] <- community.similarity.par(ot, distance="jaccard.abd.frac", use.cores=4)
+
+#Get pairwise (raw) SparCC correlations and derived "interaction matrix"
+ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=PARAM$use.cores)
+ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=PARAM$use.cores) + 1)
+
+#ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=MICROB$use.cores) for linux venus
+#ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=MICROB$use.cores) + 1) for linux venus
+
+#Unweighted TINA
+beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_uw"]][beta.div[["TINA_uw"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_uw"]]) <- colnames(beta.div[["TINA_uw"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+#Weighted TINA
+beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_w"]][beta.div[["TINA_w"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_w"]]) <- colnames(beta.div[["TINA_w"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+
+#Store in R format the ASV data
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASV_Eligible.RData"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASV_Eligible.S.RData"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivASV_Eligible.RData"))
+
+# for beta-diversity based on relative abundance: TO BE RUN ONLY IF RELATIVE ABUNDANCE WAS TAKEN FOR BETAS
+
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASVrel_Eligible.RData"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASVrel_Eligible.S.RData"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivASVrel_Eligible.RData"))
+
+
+```
+
+
+# for the OPEN data:
+
+
+
+```{r to be run in venus}
+
+###---------------------------------------------------------------------------###
+###---------------------------------------------------------------------------###
+###---------------------------------------------------------------------------###
+# Sebastian codes:
+
+#!/usr/bin/Rscript
+################################################################################
+#Project: Pancreatic Cancer Microbiome
+#
+#Calculate pairwise community (dis)similarities for 16S data.
+#
+#2017-09-26
+#sebastian.schmidt@embl.de
+################################################################################
+
+
+################################################################################
+################################################################################
+#Source convenience functions
+source("https://raw.githubusercontent.com/defleury/Schmidt_et_al_2016_community_similarity/master/functions.community_similarity.R")
+
+# for the linux server
+PARAM <- list()
+PARAM$folder.R <- getwd()
+PARAM$folder.base <- paste0( PARAM$folder.R,"/PARAM/")
+PARAM$folder.data <- paste0(PARAM$folder.base)
+PARAM$use.cores <- 20
+
+#MICROB <- list()
+#MICROB$folder.R <- getwd()
+#MICROB$folder.base <- gsub("R", "", MICROB$folder.R)
+#MICROB$folder.data <- paste0(MICROB$folder.base, "data/")
+#MICROB$use.cores <- 40
+
+################################################################################
+################################################################################
+
+
+################################################################################
+################################################################################
+#Load data
+
+load(paste0(PARAM$folder.data, "27112018_OPENfinalMatrix_pooledEligible.RData"))
+
+
+#### for the OPEN data:
+
+ot <- as.data.frame(t(t.otu.pooled)) # samples in columns and OTUs in rows
+
+#ot<-duplRows2.sum # this is the same for the 16s data WO duplicates; see that I had to reshape the data with the line above
+#ot<-t(ot) # only needed for the 16s WO duplicates data. IMPORTANT!!
+
+#Normalize to relative abundances
+ot <- t(t(ot) / colSums(ot)) # with noramlization I get the total number of reads in evry sample decided by the total number of reads each sample had. TO BE RUN ONLY FOR BETA-DIVERSITY CALCULATED. OTHERWISE COMMENT
+
+
+################################################################################
+################################################################################
+
+
+################################################################################
+################################################################################
+#Calculate sample dissimilarities
+#-> note: all metrics are calculated as similarities, not dissimilarities
+beta.div <- list();
+
+#Bray-Curtis
+beta.div[["Bray_Curtis"]] <- community.similarity.par(ot, distance="bray_curtis", use.cores=4)
+
+#Bray-Curtis on sqrt-transformed data
+beta.div[["Bray_Curtis.sqrt"]] <- community.similarity.par(sqrt(ot), distance="bray_curtis", use.cores=4)
+
+#Weighted Jaccard
+beta.div[["Jaccard_w"]] <- community.similarity.par(ot, distance="jaccard.abd.frac", use.cores=4)
+
+#Get pairwise (raw) SparCC correlations and derived "interaction matrix"
+ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=PARAM$use.cores)
+ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=PARAM$use.cores) + 1)
+
+#ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=MICROB$use.cores) for linux venus
+#ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=MICROB$use.cores) + 1) for linux venus
+
+#Unweighted TINA
+beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_uw"]][beta.div[["TINA_uw"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_uw"]]) <- colnames(beta.div[["TINA_uw"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+#Weighted TINA
+beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_w"]][beta.div[["TINA_w"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_w"]]) <- colnames(beta.div[["TINA_w"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+
+### SECOND beta-diversity run for the OPEN data:
+
+#Store in R format the OPEN data
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPEN_Eligible.RData"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPEN_Eligible.S.RData"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivOPEN_Eligible.RData"))
+
+# for beta-diversity based on relative abundance: TO BE RUN ONLY IF RELATIVE ABUNDANCE WAS TAKEN FOR BETAS
+
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPENrel_Eligible.RData"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPENrel_Eligible.S.RData"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivOPENrel_Eligible.RData"))
+
+
+```
+
+############################################
+# For TINAs we need to separate the saliva and stool samples; this was so decided on 03 November 2017!!!!! This has to be done NOW in the final beta-diversity calculations:
+
+# for the ASV data:
+
+```{r prepare the data tables to extract saliva and stool samples}
+
+df1.saliva<-subset(div.data.asv, div.data.asv$site=="oral cavity")
+
+df1<-df1.saliva$sample.name
+
+sum.saliva<-t.asv.pooled[df1,]
+
+identical(rownames(sum.saliva), as.character(df1.saliva$sample.name)) # check order: TRUE
+
+df1.stool<-subset(div.data.asv, div.data.asv$site=="stool")
+df1<-df1.stool$sample.name
+
+sum.stool<-t.asv.pooled[df1,]
+
+identical(rownames(sum.stool), as.character(df1.stool$sample.name)) # check order: TRUE
+
+# then save it as: 
+
+save(sum.saliva, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16sASV_saliva.Rdata")
+save(sum.stool, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16sASV_stool.Rdata")
+
+## Now rerun the betadiversity calculations as before!
+
+```
+
+
+# for the OPEN data:
+
+```{r prepare the data tables to extract saliva and stool samples}
+
+df1.saliva<-subset(div.data.otu, div.data.otu$site=="oral cavity")
+
+df1<-df1.saliva$sample.name
+
+sum.saliva<-t.otu.pooled[df1,]
+
+identical(rownames(sum.saliva), as.character(df1.saliva$sample.name)) # check order: TRUE
+
+df1.stool<-subset(div.data.otu, div.data.otu$site=="stool")
+df1<-df1.stool$sample.name
+
+sum.stool<-t.otu.pooled[df1,]
+
+identical(rownames(sum.stool), as.character(df1.stool$sample.name)) # check order: TRUE
+
+# then save it as: 
+
+save(sum.saliva, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16sOPEN_saliva.Rdata")
+save(sum.stool, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16sOPEN_stool.Rdata")
+
+## Now rerun the betadiversity calculations as before!
+
+```
+
+
+## The TINA beta-diversity calculations in OPEN:
+
+```{r}
+
+
+###---------------------------------------------------------------------------###
+###---------------------------------------------------------------------------###
+###---------------------------------------------------------------------------###
+# Sebastian codes:
+
+#!/usr/bin/Rscript
+################################################################################
+#Project: Pancreatic Cancer Microbiome
+#
+#Calculate pairwise community (dis)similarities for 16S data.
+#
+#2017-09-26
+#sebastian.schmidt@embl.de
+################################################################################
+
+
+################################################################################
+################################################################################
+#Source convenience functions
+source("https://raw.githubusercontent.com/defleury/Schmidt_et_al_2016_community_similarity/master/functions.community_similarity.R")
+
+# for the linux server
+PARAM <- list()
+PARAM$folder.R <- getwd()
+PARAM$folder.base <- paste0( PARAM$folder.R,"/PARAM/")
+PARAM$folder.data <- paste0(PARAM$folder.base)
+PARAM$use.cores <- 20
+
+
+################################################################################
+################################################################################
+#Load data
+
+
+load(paste0(PARAM$folder.data, "30112018_16sOPEN_saliva.RData"))
+load(paste0(PARAM$folder.data, "30112018_16sOPEN_stool.RData"))
+
+#### for the OPEN data / SALIVA:
+
+ot <- as.data.frame(t(sum.saliva)) # samples in columns and OTUs in rows
+
+#ot<-duplRows2.sum # this is the same for the 16s data WO duplicates; see that I had to reshape the data with the line above
+#ot<-t(ot) # only needed for the 16s WO duplicates data. IMPORTANT!!
+
+#Normalize to relative abundances
+ot <- t(t(ot) / colSums(ot)) # with noramlization I get the total number of reads in evry sample decided by the total number of reads each sample had. TO BE RUN ONLY FOR BETA-DIVERSITY CALCULATED. OTHERWISE COMMENT
+
+
+################################################################################
+################################################################################
+
+################################################################################
+################################################################################
+#Calculate sample dissimilarities
+#-> note: all metrics are calculated as similarities, not dissimilarities
+beta.div <- list();
+
+#Bray-Curtis
+beta.div[["Bray_Curtis"]] <- community.similarity.par(ot, distance="bray_curtis", use.cores=4)
+
+#Bray-Curtis on sqrt-transformed data
+beta.div[["Bray_Curtis.sqrt"]] <- community.similarity.par(sqrt(ot), distance="bray_curtis", use.cores=4)
+
+#Weighted Jaccard
+beta.div[["Jaccard_w"]] <- community.similarity.par(ot, distance="jaccard.abd.frac", use.cores=4)
+
+#Get pairwise (raw) SparCC correlations and derived "interaction matrix"
+ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=PARAM$use.cores)
+ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=PARAM$use.cores) + 1)
+
+#ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=MICROB$use.cores) for linux venus
+#ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=MICROB$use.cores) + 1) for linux venus
+
+#Unweighted TINA
+beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_uw"]][beta.div[["TINA_uw"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_uw"]]) <- colnames(beta.div[["TINA_uw"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+#Weighted TINA
+beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_w"]][beta.div[["TINA_w"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_w"]]) <- colnames(beta.div[["TINA_w"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+
+### SECOND beta-diversity run for the OPEN data:
+
+#Store in R format the OPEN data
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPEN_EligibleSALIVA.Rdata"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPEN_EligibleSALIVA.S.Rdata"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivOPEN_EligibleSALIVA.Rdata"))
+
+# for beta-diversity based on relative abundance: TO BE RUN ONLY IF RELATIVE ABUNDANCE WAS TAKEN FOR BETAS
+
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPENrel_EligibleSALIVA.Rdata"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPENrel_EligibleSALIVA.S.Rdata"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivOPENrel_EligibleSALIVA.Rdata"))
+
+
+#### for the OPEN data / STOOL:
+
+ot <- as.data.frame(t(sum.stool)) # samples in columns and OTUs in rows
+
+#ot<-duplRows2.sum # this is the same for the 16s data WO duplicates; see that I had to reshape the data with the line above
+#ot<-t(ot) # only needed for the 16s WO duplicates data. IMPORTANT!!
+
+#Normalize to relative abundances
+ot <- t(t(ot) / colSums(ot)) # with noramlization I get the total number of reads in evry sample decided by the total number of reads each sample had. TO BE RUN ONLY FOR BETA-DIVERSITY CALCULATED. OTHERWISE COMMENT
+
+
+################################################################################
+################################################################################
+
+################################################################################
+################################################################################
+#Calculate sample dissimilarities
+#-> note: all metrics are calculated as similarities, not dissimilarities
+beta.div <- list();
+
+#Bray-Curtis
+beta.div[["Bray_Curtis"]] <- community.similarity.par(ot, distance="bray_curtis", use.cores=4)
+
+#Bray-Curtis on sqrt-transformed data
+beta.div[["Bray_Curtis.sqrt"]] <- community.similarity.par(sqrt(ot), distance="bray_curtis", use.cores=4)
+
+#Weighted Jaccard
+beta.div[["Jaccard_w"]] <- community.similarity.par(ot, distance="jaccard.abd.frac", use.cores=4)
+
+#Get pairwise (raw) SparCC correlations and derived "interaction matrix"
+ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=PARAM$use.cores)
+ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=PARAM$use.cores) + 1)
+
+#ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=MICROB$use.cores) for linux venus
+#ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=MICROB$use.cores) + 1) for linux venus
+
+#Unweighted TINA
+beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_uw"]][beta.div[["TINA_uw"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_uw"]]) <- colnames(beta.div[["TINA_uw"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+#Weighted TINA
+beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_w"]][beta.div[["TINA_w"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_w"]]) <- colnames(beta.div[["TINA_w"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+
+### SECOND beta-diversity run for the OPEN data:
+
+#Store in R format the OPEN data
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPEN_EligibleSTOOL.Rdata"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPEN_EligibleSTOOL.S.Rdata"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivOPEN_EligibleSTOOL.Rdata"))
+
+# for beta-diversity based on relative abundance: TO BE RUN ONLY IF RELATIVE ABUNDANCE WAS TAKEN FOR BETAS
+
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPENrel_EligibleSTOOL.Rdata"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccOPENrel_EligibleSTOOL.S.Rdata"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivOPENrel_EligibleSTOOL.Rdata"))
+
+
+
+```
+
+
+
+
+## The TINA beta-diversity calculations in ASV:
+
+```{r}
+
+
+###---------------------------------------------------------------------------###
+###---------------------------------------------------------------------------###
+###---------------------------------------------------------------------------###
+# Sebastian codes:
+
+#!/usr/bin/Rscript
+################################################################################
+#Project: Pancreatic Cancer Microbiome
+#
+#Calculate pairwise community (dis)similarities for 16S data.
+#
+#2017-09-26
+#sebastian.schmidt@embl.de
+################################################################################
+
+
+################################################################################
+################################################################################
+#Source convenience functions
+source("https://raw.githubusercontent.com/defleury/Schmidt_et_al_2016_community_similarity/master/functions.community_similarity.R")
+
+
+# for the linux server
+PARAM <- list()
+PARAM$folder.R <- getwd()
+PARAM$folder.base <- paste0( PARAM$folder.R,"/PARAM/")
+PARAM$folder.data <- paste0(PARAM$folder.base)
+PARAM$use.cores <- 20
+
+
+################################################################################
+################################################################################
+#Load data
+
+
+load(paste0(PARAM$folder.data, "30112018_16sASV_saliva.RData"))
+load(paste0(PARAM$folder.data, "30112018_16sASV_stool.RData"))
+
+#### for the OPEN data / SALIVA:
+
+ot <- as.data.frame(t(sum.saliva)) # samples in columns and OTUs in rows
+
+#ot<-duplRows2.sum # this is the same for the 16s data WO duplicates; see that I had to reshape the data with the line above
+#ot<-t(ot) # only needed for the 16s WO duplicates data. IMPORTANT!!
+
+#Normalize to relative abundances
+ot <- t(t(ot) / colSums(ot)) # with noramlization I get the total number of reads in evry sample decided by the total number of reads each sample had. TO BE RUN ONLY FOR BETA-DIVERSITY CALCULATED. OTHERWISE COMMENT
+
+
+################################################################################
+################################################################################
+
+################################################################################
+################################################################################
+#Calculate sample dissimilarities
+#-> note: all metrics are calculated as similarities, not dissimilarities
+beta.div <- list();
+
+#Bray-Curtis
+beta.div[["Bray_Curtis"]] <- community.similarity.par(ot, distance="bray_curtis", use.cores=4)
+
+#Bray-Curtis on sqrt-transformed data
+beta.div[["Bray_Curtis.sqrt"]] <- community.similarity.par(sqrt(ot), distance="bray_curtis", use.cores=4)
+
+#Weighted Jaccard
+beta.div[["Jaccard_w"]] <- community.similarity.par(ot, distance="jaccard.abd.frac", use.cores=4)
+
+#Get pairwise (raw) SparCC correlations and derived "interaction matrix"
+ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=PARAM$use.cores)
+ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=PARAM$use.cores) + 1)
+
+#ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=MICROB$use.cores) for linux venus
+#ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=MICROB$use.cores) + 1) for linux venus
+
+#Unweighted TINA
+beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_uw"]][beta.div[["TINA_uw"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_uw"]]) <- colnames(beta.div[["TINA_uw"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+#Weighted TINA
+beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_w"]][beta.div[["TINA_w"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_w"]]) <- colnames(beta.div[["TINA_w"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+
+### SECOND beta-diversity run for the OPEN data:
+
+#Store in R format the OPEN data
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASV_EligibleSALIVA.Rdata"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASV_EligibleSALIVA.S.Rdata"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivOASV_EligibleSALIVA.Rdata"))
+
+# for beta-diversity based on relative abundance: TO BE RUN ONLY IF RELATIVE ABUNDANCE WAS TAKEN FOR BETAS
+
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASVrel_EligibleSALIVA.Rdata"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASVrel_EligibleSALIVA.S.Rdata"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivASVrel_EligibleSALIVA.Rdata"))
+
+
+#### for the OPEN data / STOOL:
+
+ot <- as.data.frame(t(sum.stool)) # samples in columns and OTUs in rows
+
+#ot<-duplRows2.sum # this is the same for the 16s data WO duplicates; see that I had to reshape the data with the line above
+#ot<-t(ot) # only needed for the 16s WO duplicates data. IMPORTANT!!
+
+#Normalize to relative abundances
+ot <- t(t(ot) / colSums(ot)) # with noramlization I get the total number of reads in evry sample decided by the total number of reads each sample had. TO BE RUN ONLY FOR BETA-DIVERSITY CALCULATED. OTHERWISE COMMENT
+
+
+################################################################################
+################################################################################
+
+################################################################################
+################################################################################
+#Calculate sample dissimilarities
+#-> note: all metrics are calculated as similarities, not dissimilarities
+beta.div <- list();
+
+#Bray-Curtis
+beta.div[["Bray_Curtis"]] <- community.similarity.par(ot, distance="bray_curtis", use.cores=4)
+
+#Bray-Curtis on sqrt-transformed data
+beta.div[["Bray_Curtis.sqrt"]] <- community.similarity.par(sqrt(ot), distance="bray_curtis", use.cores=4)
+
+#Weighted Jaccard
+beta.div[["Jaccard_w"]] <- community.similarity.par(ot, distance="jaccard.abd.frac", use.cores=4)
+
+#Get pairwise (raw) SparCC correlations and derived "interaction matrix"
+ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=PARAM$use.cores)
+ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=PARAM$use.cores) + 1)
+
+#ot.sparcc <- sparcc(ot, size.thresh=0, pseudocount=10^-6, nblocks=4, use.cores=MICROB$use.cores) for linux venus
+#ot.sparcc.S <- 0.5 * (cor.par(ot.sparcc, nblocks=100, use.cores=MICROB$use.cores) + 1) for linux venus
+
+#Unweighted TINA
+beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_uw"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.uw.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_uw"]][beta.div[["TINA_uw"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_uw"]]) <- colnames(beta.div[["TINA_uw"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+#Weighted TINA
+beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=PARAM$use.cores)
+#beta.div[["TINA_w"]] <- community.similarity.corr.par(ot, S=ot.sparcc.S, distance="jaccard.corr.w.norm", blocksize=100, use.cores=MICROB$use.cores) for linux venus
+
+beta.div[["TINA_w"]][beta.div[["TINA_w"]] < 0] <- 0
+
+#rownames(beta.div[["TINA_w"]]) <- colnames(beta.div[["TINA_w"]]) <- colnames(ot) # this was added by Sebastian later (I did never use it)
+
+
+### SECOND beta-diversity run for the OPEN data:
+
+#Store in R format the OPEN data
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASV_EligibleSTOOL.Rdata"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASV_EligibleSTOOL.S.Rdata"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivASV_EligibleSTOOL.Rdata"))
+
+# for beta-diversity based on relative abundance: TO BE RUN ONLY IF RELATIVE ABUNDANCE WAS TAKEN FOR BETAS
+
+save(ot.sparcc, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASVrel_EligibleSTOOL.Rdata"))
+save(ot.sparcc.S, file=paste0(PARAM$folder.data, "30112018_16s_betas_sparccASVrel_EligibleSTOOL.S.Rdata"))
+save(beta.div, file=paste0(PARAM$folder.data, "30112018_16s_betasdivASVrel_EligibleSTOOL.Rdata"))
+
+
+```
+
+
+## BE CAREFUL with the name of the file: Rdata or RData. This gave some trouble!!
+

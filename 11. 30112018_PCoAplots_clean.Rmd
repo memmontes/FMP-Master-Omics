@@ -1,0 +1,1209 @@
+---
+title: "PCoAplots"
+author: "Esther Molina"
+date: "30 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## prepare the environment:
+
+```{r}
+library(ggplot2, quietly=T)
+library(gplots, quietly=T)
+library("plyr")
+library("ape")
+library("phyloseq")
+library("vegan")
+library("car")
+
+library("vegan")
+library("phyloseq")
+
+
+```
+
+
+# load all the data:
+
+```{r}
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+# the beta-diversity measures:
+
+
+# beta-diversity measures
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_Eligible.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_Eligible.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+# Here I loaded the relative abundance data.
+# For Bray-Curtis, it is fine with relative abundance. 
+# For others it is better to use the raw data. 
+# For TINA it is better to use beta by site, as I have calculated it.
+# For now, I will work with the relative abundance data
+
+```
+
+# get the matrix:
+
+```{r}
+
+names(beta.div.ASV)
+#"Bray_Curtis" "Bray_Curtis.sqrt" "Jaccard_w" "TINA_uw" "TINA_w"          
+names(beta.div.OPEN)
+
+# and for the number of samples:
+dim(beta.div.ASV[[2]])
+# 573 x 573
+dim(beta.div.OPEN[[2]])
+# 580 x 580
+
+# now convert to distance matrix the matrix data file that we obtained:
+dist.betadiv.ASV<-lapply(beta.div.ASV, as.dist)
+dist.betadiv.OPEN<-lapply(beta.div.OPEN, as.dist)
+
+# here we have in a list the 5 beta-diversity indexes calculated 
+# save this as a R data: ALREADY SAVED
+
+#save(dist.betadiv.ASV, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Distances/30112018_16sCalculatedBetasASVEligible.Rdata")
+#save(dist.betadiv.OPEN, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Distances/30112018_16sCalculatedBetasOPENEligible.Rdata")
+
+```
+
+
+
+```{r check the data structure cars}
+
+# check that the data is OK in terms of rownames
+
+#rownames(beta.div.ASV[["TINA_uw"]])
+#rownames(beta.div.OPEN[["TINA_uw"]])
+#rownames(beta.div.ASV[["TINA_w"]])
+#rownames(beta.div.OPEN[["TINA_w"]])
+#rownames(beta.div.ASV[["Bray_Curtis"]])
+#rownames(beta.div.OPEN[["Bray_Curtis"]])
+
+# check the data structure to have it ordered; here check rownames as well
+head(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+head(as.matrix(dist.betadiv.ASV[["TINA_w"]]))
+head(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]]))
+
+head(as.matrix(dist.betadiv.OPEN[["TINA_uw"]]))
+head(as.matrix(dist.betadiv.OPEN[["TINA_w"]]))
+head(as.matrix(dist.betadiv.OPEN[["Bray_Curtis"]]))
+
+# need to order betadiv colnames with div.data.asv ASV
+rownames(div.data.asv)<-as.character(div.data.asv$sample.name)
+div.data.asv <- div.data.asv[rownames(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]])), ]
+
+# now make sure that all distance matrixes have the same order:
+identical(rownames(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]])), rownames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))) # THIS IS TRUE
+rownames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+colnames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+
+
+
+```
+
+
+# Test whether there are differences in community composition:
+
+########################----------------------------------------####################################
+### TEST DIFFERENCES IN COMMUNITY COMPOSITION
+####################################################################################################
+
+# 1) select distances by site
+
+```{r}
+
+# calculate PCoA with our own beta-diversity calculations and then plot
+# extract the indexes from the list: Bray_Curtis and all other, also by site
+
+Bray <- dist.betadiv.ASV[["Bray_Curtis"]]
+Bray.saliva <- as.dist(as.matrix(Bray)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Bray.stool <- as.dist(as.matrix(Bray)[div.data.asv$site =="stool", div.data.asv$site =="stool"])
+
+Bray.sqrt<- dist.betadiv.ASV[["Bray_Curtis.sqrt"]]
+Bray.sqrt.saliva <- as.dist(as.matrix(Bray.sqrt)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Bray.sqrt.stool <- as.dist(as.matrix(Bray.sqrt)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+Bray.sqrt<- dist.betadiv.ASV[["Bray_Curtis.sqrt"]]
+Bray.sqrt.saliva <- as.dist(as.matrix(Bray.sqrt)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Bray.sqrt.stool <- as.dist(as.matrix(Bray.sqrt)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+Jaccard_w<- dist.betadiv.ASV[["Jaccard_w"]]
+Jaccard_w.saliva <- as.dist(as.matrix(Jaccard_w)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Jaccard_w.stool <- as.dist(as.matrix(Jaccard_w)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+TINA_uw<- dist.betadiv.ASV[["TINA_uw"]]
+TINA_uw.saliva <- as.dist(as.matrix(TINA_uw)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+TINA_uw.stool <- as.dist(as.matrix(TINA_uw)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+TINA_w<- dist.betadiv.ASV[["TINA_w"]]
+TINA_w.saliva <- as.dist(as.matrix(TINA_w)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+TINA_w.stool <- as.dist(as.matrix(TINA_w)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+
+# double check:
+rownames(as.matrix(TINA_w)[div.data.asv$site == "stool", div.data.asv$site == "stool"])
+rownames(as.matrix(TINA_w)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+
+```
+
+# 2) check that the data is ordered:
+
+```{r}
+
+##choose right data set according to sites:
+
+data.sample_ST<-subset(div.data.asv, div.data.asv$site=="stool") # metadata for oral samples
+data.sample_OR<-subset(div.data.asv, div.data.asv$site=="oral cavity") # metadata for stool samples
+
+# add first the disease status variable:
+div.data.asv$Disease.status <- recode(div.data.asv$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+data.sample <- div.data.asv
+data.sample <- data.sample[rownames(as.matrix(Bray)), ] # order metadata the same as beta-distance matrix
+
+data.sample_OR <- data.sample[rownames(as.matrix(Bray.saliva)), ] # order oral metadata the same as beta-distance matrix; there are 455 saliva samples
+
+data.sample_ST <- data.sample[rownames(as.matrix(Bray.stool)), ] # order stool metadata the same as beta-distance matrix; there are 118 stool samples
+
+# to double check:
+
+rownames(as.matrix(Bray.stool))
+data.sample_ST$sample.name
+
+rownames(as.matrix(Bray.saliva))
+data.sample_OR$sample.name
+
+# check again that this everything was well ordered
+identical(rownames(as.matrix(Bray.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_uw.saliva)), as.character(data.sample_OR$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_uw.stool)), as.character(data.sample_ST$sample.name)) # TRUE
+identical(rownames(as.matrix(Jaccard_w.stool)), as.character(data.sample_ST$sample.name)) # TRUE
+
+identical(rownames(as.matrix(Bray)), as.character(data.sample$sample.name)) # TRUE
+identical(rownames(as.matrix(Bray)), rownames(data.sample)) # TRUE
+
+
+```
+
+
+# make again sure that ordering was well performed:
+
+```{r}
+# make sure that ordering was well performed; for ASV data:
+identical(rownames(as.matrix(Bray)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(Bray)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Bray.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Bray.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(Bray.sqrt)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(Bray.sqrt)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Bray.sqrt.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Bray.sqrt.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(Jaccard_w)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(Jaccard_w)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Jaccard_w.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Jaccard_w.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(TINA_uw)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(TINA_uw)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(TINA_uw.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_uw.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(TINA_w)), as.character(div.data.asv$sample.name))
+identical(rownames(as.matrix(TINA_w)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(TINA_w.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_w.stool)), as.character(data.sample_ST$sample.name))
+
+
+```
+
+
+# calculate the pcoas:
+
+```{r}
+# Calculate all PCoA: ORDINATE; start with Bray-curtis
+
+pcoa.global <- pcoa(Bray)
+pcoa.saliva <- pcoa(Bray.saliva)
+pcoa.stool <- pcoa(Bray.stool)
+
+```
+
+# obtain the PCoA plots: OVERALL
+
+```{r}
+
+#Generate a "global" Principal Coordinates Analysis plot
+
+curr.pcoa <- pcoa.global
+
+root.dir <- "D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Plots/"
+
+# check again the data ordering:
+#check the order of sample id 
+identical(rownames(as.matrix(Bray)), as.character(data.sample$sample.name))
+
+#Prepare data for plotting
+plot.data <- data.frame(data.sample, Axis.1=curr.pcoa$vectors[, "Axis.1"], Axis.2=curr.pcoa$vectors[, "Axis.2"], Group=interaction(data.sample$Disease.status, data.sample$site))
+#Get percent variation explained
+if (curr.pcoa$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoa$values[1:2, "Relative_eig"]/sum(curr.pcoa$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoa$values[1:2, "Rel_corr_eig"]/sum(curr.pcoa$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot.df <- merge(plot.data, plot.centroids, by="Group")
+
+#Plot ordination
+curr.plot<-ggplot(curr.plot.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #geom_point() +geom_text(label=rownames(data.sample),hjust=0, vjust=0) +
+  #Add group centroids
+  geom_point(data=curr.plot.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=5, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (saliva and stool samples for Bray Curtis index)") +
+  #Set overall plot theme
+  theme_bw()
+ ggsave(filename=paste0(root.dir, "PCoA Analysis Overall (Bray) OPEN.pdf"), plot=curr.plot) 
+
+
+```
+
+# the same by site:
+
+```{r}
+#----------------------------------------------------------
+## do the same for the saliva samples only:
+
+curr.pcoa <- pcoa.saliva
+
+# consider saliva samples only here: saliva.meta.saliva
+
+identical(rownames(as.matrix(Bray.saliva)), as.character(data.sample_OR$sample.name))
+
+#Prepare data for plotting
+plot.data <- data.frame(data.sample_OR, Axis.1=curr.pcoa$vectors[, "Axis.1"], Axis.2=curr.pcoa$vectors[, "Axis.2"], Group=interaction(data.sample_OR$Disease.status))
+#Get percent variation explained
+if (curr.pcoa$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoa$values[1:2, "Relative_eig"]/sum(curr.pcoa$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoa$values[1:2, "Rel_corr_eig"]/sum(curr.pcoa$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot.df <- merge(plot.data, plot.centroids, by="Group")
+
+#Plot ordination
+curr.plot<-ggplot(curr.plot.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=5, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (saliva samples for Bray Curtis index)") +
+  #Set overall plot theme
+  theme_bw()
+ggsave(filename=paste0(root.dir, "PCoA Analysis saliva (Bray) OPEN.pdf"), plot=curr.plot) 
+
+
+## do the same for the saliva samples only:
+
+curr.pcoa <- pcoa.stool
+
+# consider saliva samples only here: saliva.meta.saliva
+
+identical(rownames(as.matrix(Bray.stool)), as.character(data.sample_ST$sample.name))
+
+#Prepare data for plotting
+plot.data <- data.frame(data.sample_ST, Axis.1=curr.pcoa$vectors[, "Axis.1"], Axis.2=curr.pcoa$vectors[, "Axis.2"], Group=interaction(data.sample_ST$Disease.status))
+#Get percent variation explained
+if (curr.pcoa$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoa$values[1:2, "Relative_eig"]/sum(curr.pcoa$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoa$values[1:2, "Rel_corr_eig"]/sum(curr.pcoa$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot.df <- merge(plot.data, plot.centroids, by="Group")
+
+#Plot ordination
+curr.plot<-ggplot(curr.plot.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  #geom_point() +geom_text(label=rownames(data.sample_ST),hjust=0, vjust=0) +
+  geom_segment(data=curr.plot.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=5, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (stool samples for Bray Curtis index)") +
+  #Set overall plot theme
+  theme_bw()
+ggsave(filename=paste0(root.dir, "PCoA Analysis stool (Bray) OPEN.pdf"), plot=curr.plot) 
+
+
+```
+
+#### DO ALL PLOTS TOGETHER:
+
+For all indexes calculate PCoAs
+
+```{r PCoA}
+
+pcoa.globalBray <- pcoa(Bray)
+pcoa.salivaBray <- pcoa(Bray.saliva)
+pcoa.stoolBray <- pcoa(Bray.stool)
+
+pcoa.globalBraysqrt <- pcoa(Bray.sqrt)
+pcoa.salivaBraysqrt <- pcoa(Bray.sqrt.saliva)
+pcoa.stoolBraysqrt <- pcoa(Bray.sqrt.stool)
+
+pcoa.globalJac <- pcoa(Jaccard_w)
+pcoa.salivaJac <- pcoa(Jaccard_w.saliva)
+pcoa.stoolJac <- pcoa(Jaccard_w.stool)
+
+pcoa.globalTINA_uw <- pcoa(TINA_uw)
+pcoa.salivaTINA_uw <- pcoa(TINA_uw.saliva)
+pcoa.stoolTINA_uw <- pcoa(TINA_uw.stool)
+
+pcoa.globalTINA_w <- pcoa(TINA_w)
+pcoa.salivaTINA_w <- pcoa(TINA_w.saliva)
+pcoa.stoolTINA_w <- pcoa(TINA_w.stool)
+
+```
+
+## Get TINA site-specific as well:
+
+```{r}
+
+# for ASV data:
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_EligibleSALIVA.Rdata")
+dist.betadiv.saliva<-lapply(beta.div, as.dist)
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_EligibleSTOOL.Rdata")
+dist.betadiv.stool<-lapply(beta.div, as.dist)
+
+# for the OPEN data:
+
+#load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_EligibleSALIVA.Rdata")
+#dist.betadiv.saliva<-lapply(beta.div, as.dist) # uncomment for OPEN data
+#load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_EligibleSTOOL.Rdata")
+#dist.betadiv.stool<-lapply(beta.div, as.dist) # uncomment for OPEN data
+
+TINA_uw.saliva2<- dist.betadiv.saliva[["TINA_uw"]]
+TINA_w.saliva2<- dist.betadiv.saliva[["TINA_w"]]
+
+TINA_uw.stool2<- dist.betadiv.stool[["TINA_uw"]]
+TINA_w.stool2<- dist.betadiv.stool[["TINA_w"]]
+
+# reorder to have the samples as data.sample:
+
+TINA_uw.saliva2<-as.dist(as.matrix(TINA_uw.saliva2)[rownames(data.sample_OR), rownames(data.sample_OR)])
+TINA_w.saliva2<-as.dist(as.matrix(TINA_w.saliva2)[rownames(data.sample_OR), rownames(data.sample_OR)])
+
+TINA_uw.stool2<-as.dist(as.matrix(TINA_uw.stool2)[rownames(data.sample_ST), rownames(data.sample_ST)])
+TINA_w.stool2<-as.dist(as.matrix(TINA_w.stool2)[rownames(data.sample_ST), rownames(data.sample_ST)])
+
+# make sure that ordering was well performed
+identical(rownames(as.matrix(TINA_uw.stool2)), as.character(data.sample_ST$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_w.stool2)), as.character(data.sample_ST$sample.name)) # TRUE
+
+identical(rownames(as.matrix(TINA_uw.saliva2)), as.character(data.sample_OR$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_w.saliva2)), as.character(data.sample_OR$sample.name)) # TRUE
+
+# extract the pcoa
+
+pcoa.salivaTINA_w2 <- pcoa(TINA_w.saliva2) # site-specific
+pcoa.stoolTINA_w2 <- pcoa(TINA_w.stool2) # site-specific
+pcoa.salivaTINA_uw2 <- pcoa(TINA_uw.saliva2) # site-specific
+pcoa.stoolTINA_uw2 <- pcoa(TINA_uw.stool2) # site-specific
+
+```
+
+
+## Plot all PCoAs by site
+The same for all plots in the same file;  for saliva and saliva samples separately, combining all the 5 indexes
+
+## FOR THE STOOL SAMPLES:
+
+```{r plots in combinatio, echo=TRUE}
+
+require(gridExtra)
+setwd("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Plots/")
+pdf("30112018_16s_stool_BetaDiv_Plots(Elegibles)_OPEN.pdf", width=15, height=15)
+par(mfrow=c(3,3))
+
+curr.pcoasal <- pcoa.stoolBray
+
+# consider stool samples only here: stool.div.dataE
+
+#Prepare data for plotting
+plot.data1 <- data.frame(data.sample_ST, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_ST$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data1, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data1, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot1.df <- merge(plot.data1, plot.centroids, by="Group")
+
+#Plot ordination
+plot1<-ggplot(curr.plot1.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot1.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot1.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (stool samples for Bray Curtis index)") +
+  #Set overall plot theme
+  theme_bw()
+
+curr.pcoasal <- pcoa.stoolBraysqrt # careful! for saliva this is Braysqr
+
+# consider stool samples only here: stool.div.dataE
+
+#Prepare data for plotting
+plot.data2 <- data.frame(data.sample_ST, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_ST$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data2, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data2, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot2.df <- merge(plot.data2, plot.centroids, by="Group")
+
+#Plot ordination
+plot2<-ggplot(curr.plot2.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot2.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot2.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (stool samples for Bray Curtis SQRT index)") +
+  #Set overall plot theme
+  theme_bw()
+
+curr.pcoasal <- pcoa.stoolJac
+
+# consider stool samples only here: stool.div.dataE
+
+#Prepare data for plotting
+plot.data3 <- data.frame(data.sample_ST, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_ST$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data3, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data3, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot3.df <- merge(plot.data3, plot.centroids, by="Group")
+
+#Plot ordination
+plot3<-ggplot(curr.plot3.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot3.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot3.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (stool samples for Jaccard_w index)") +
+  #Set overall plot theme
+  theme_bw()
+
+curr.pcoasal <- pcoa.stoolTINA_uw2 # for site-specific
+
+# consider stool samples only here: stool.div.dataE
+
+#Prepare data for plotting
+plot.data4 <- data.frame(data.sample_ST, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_ST$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data4, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data4, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot4.df <- merge(plot.data4, plot.centroids, by="Group")
+
+#Plot ordination
+plot4<-ggplot(curr.plot4.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot4.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot4.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (stool samples for TINA_uw index)") +
+  #Set overall plot theme
+  theme_bw()
+
+curr.pcoasal <- pcoa.stoolTINA_w2
+
+# consider stool samples only here: stool.div.dataE
+
+plot.data5 <- data.frame(data.sample_ST, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_ST$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data5, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data5, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot5.df <- merge(plot.data5, plot.centroids, by="Group")
+
+#Plot ordination
+plot5<-ggplot(curr.plot5.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot5.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot5.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (stool samples for TINA_w index)") +
+  #Set overall plot theme
+  theme_bw()
+
+grid.arrange(plot1, plot2, plot3, plot4, plot5)
+
+dev.off()
+
+```
+
+
+# FOR THE SALIVA SAMPLES:
+
+
+```{r plots in combinatio, echo=TRUE}
+
+require(gridExtra)
+setwd("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Plots/")
+pdf("30112018_16s_saliva_BetaDiv_Plots(Elegibles)_OPEN.pdf", width=15, height=15)
+par(mfrow=c(3,3))
+
+curr.pcoasal <- pcoa.salivaBray
+
+# consider saliva samples only here: saliva.div.dataE
+
+#Prepare data for plotting
+plot.data1 <- data.frame(data.sample_OR, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_OR$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data1, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data1, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot1.df <- merge(plot.data1, plot.centroids, by="Group")
+
+#Plot ordination
+plot1<-ggplot(curr.plot1.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot1.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot1.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (saliva samples for Bray Curtis index)") +
+  #Set overall plot theme
+  theme_bw()
+
+curr.pcoasal <- pcoa.salivaBraysqrt # careful! for saliva this is Braysqr
+
+
+# consider saliva samples only here: saliva.div.dataE
+
+#Prepare data for plotting
+plot.data2 <- data.frame(data.sample_OR, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_OR$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data2, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data2, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot2.df <- merge(plot.data2, plot.centroids, by="Group")
+
+#Plot ordination
+plot2<-ggplot(curr.plot2.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot2.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot2.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (saliva samples for Bray Curtis SQRT index)") +
+  #Set overall plot theme
+  theme_bw()
+
+curr.pcoasal <- pcoa.salivaJac
+
+# consider saliva samples only here: saliva.div.dataE
+
+#Prepare data for plotting
+plot.data3 <- data.frame(data.sample_OR, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_OR$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data3, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data3, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot3.df <- merge(plot.data3, plot.centroids, by="Group")
+
+#Plot ordination
+plot3<-ggplot(curr.plot3.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot3.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot3.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (saliva samples for Jaccard_w index)") +
+  #Set overall plot theme
+  theme_bw()
+
+curr.pcoasal <- pcoa.salivaTINA_uw2 # for site-specific
+
+# consider saliva samples only here: saliva.div.dataE
+
+#Prepare data for plotting
+plot.data4 <- data.frame(data.sample_OR, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_OR$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data4, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data4, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot4.df <- merge(plot.data4, plot.centroids, by="Group")
+
+#Plot ordination
+plot4<-ggplot(curr.plot4.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot4.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot4.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (saliva samples for TINA_uw index)") +
+  #Set overall plot theme
+  theme_bw()
+
+curr.pcoasal <- pcoa.salivaTINA_w2
+
+# consider saliva samples only here: saliva.div.dataE
+
+plot.data5 <- data.frame(data.sample_OR, Axis.1=curr.pcoasal$vectors[, "Axis.1"], Axis.2=curr.pcoasal$vectors[, "Axis.2"], Group=interaction(data.sample_OR$Disease.status))
+#Get percent variation explained
+if (curr.pcoasal$correction[1] == "none") {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Relative_eig"]/sum(curr.pcoasal$values[, "Relative_eig"]), digits=1)
+} else {
+  plot.var_explained <- round(100*curr.pcoasal$values[1:2, "Rel_corr_eig"]/sum(curr.pcoasal$values[, "Rel_corr_eig"]), digits=1)
+}
+#Get convex hulls around points
+plot.hulls <- ddply(plot.data5, "Group", function(df) df[chull(df$Axis.1, df$Axis.2), ])
+#Get centroids
+plot.centroids <- ddply(plot.data5, "Group", function(df) c(mean(df$Axis.1), mean(df$Axis.2)))
+curr.plot5.df <- merge(plot.data5, plot.centroids, by="Group")
+
+#Plot ordination
+plot5<-ggplot(curr.plot5.df, aes_string(x="Axis.1", y="Axis.2", colour="Group", shape="site")) +
+  #Add group centroids
+  geom_point(data=curr.plot5.df, aes(x=V1, y=V2, color=Group), shape=15, size=8) +
+  #Add segments of points to centroids
+  geom_segment(data=curr.plot5.df, aes(x=Axis.1, y=Axis.2, xend=V1, yend=V2), alpha=0.75) +
+  #Add points (per sample)
+  geom_point(size=4, alpha=0.6) +
+  #Add ellipses (at 95%)
+  stat_ellipse(level=0.95, segments=101, alpha=0.8) +
+  #Add convex hull around all points per group
+  geom_polygon(data = plot.hulls, aes(fill=Group), color=NA, alpha = 0.1) +
+  #Add x & y axis labels
+  xlab(paste("Axis 1 [", plot.var_explained[1], "%]", sep="")) +
+  ylab(paste("Axis 2 [", plot.var_explained[2], "%]", sep="")) +
+  #Add title
+  ggtitle("Global PCoA (saliva samples for TINA_w index)") +
+  #Set overall plot theme
+  theme_bw()
+
+grid.arrange(plot1, plot2, plot3, plot4, plot5)
+
+dev.off()
+
+```
+
+
+# comment about TINA plots: variance explained by axes sums to >100%. This is because TINA is not a true distance (not a metric), so funky eigenvectors can occur. But this is nothing to worry about - it just means that the PCoA is no a perfect ordination to project these values. Overall, the method does amplify differences between samples, so outliers can be "more outlying" than with other measures. Another thing is the scaling of TINA. TINA dist == 0 means completely equivalent samples, TINA == 0.5 means "neutrally expected" sharing of interactions, and TINA == 1 means completely disjoint interactions between taxa. So in studies like these, TINA values will often be 0 < TINA < 0.5. Whereas Bray-Curtis is mostly 0.5 < BC < 1. But for statistical tests, it's the distance ratios and rankings that matter.
+# in any case, we have now TINA-site speficic as well.
+
+
+###############################
+## DO THE SAME FOR THE OPEN DATA:
+###############################
+
+# 1) select distances by site
+
+```{r}
+
+# calculate PCoA with our own beta-diversity calculations and then plot
+# extract the indexes from the list: Bray_Curtis and all other, also by site
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+
+# need to order betadiv colnames with div.data.OPEN
+
+rownames(div.data.otu)<-as.character(div.data.otu$sample.name)
+div.data.otu <- div.data.otu[rownames(as.matrix(dist.betadiv.OPEN[["Bray_Curtis"]])), ]
+
+# make sure we have the same order:
+identical(rownames(as.matrix(beta.div.OPEN[["Bray_Curtis"]])), rownames(as.matrix(beta.div.OPEN[["TINA_uw"]]))) # THIS IS TRUE
+rownames(as.matrix(beta.div.OPEN[["TINA_uw"]]))
+colnames(as.matrix(beta.div.OPEN[["TINA_uw"]]))
+rownames(as.matrix(beta.div.OPEN[["Bray_Curtis"]]))
+colnames(as.matrix(beta.div.OPEN[["Bray_Curtis"]]))
+
+# extract the distances:
+
+Bray <- dist.betadiv.OPEN[["Bray_Curtis"]]
+Bray.saliva <- as.dist(as.matrix(Bray)[div.data.otu$site == "oral cavity", div.data.otu$site == "oral cavity"])
+Bray.stool <- as.dist(as.matrix(Bray)[div.data.otu$site =="stool", div.data.otu$site =="stool"])
+
+Bray.sqrt<- dist.betadiv.OPEN[["Bray_Curtis.sqrt"]]
+Bray.sqrt.saliva <- as.dist(as.matrix(Bray.sqrt)[div.data.otu$site == "oral cavity", div.data.otu$site == "oral cavity"])
+Bray.sqrt.stool <- as.dist(as.matrix(Bray.sqrt)[div.data.otu$site == "stool", div.data.otu$site == "stool"])
+
+Bray.sqrt<- dist.betadiv.OPEN[["Bray_Curtis.sqrt"]]
+Bray.sqrt.saliva <- as.dist(as.matrix(Bray.sqrt)[div.data.otu$site == "oral cavity", div.data.otu$site == "oral cavity"])
+Bray.sqrt.stool <- as.dist(as.matrix(Bray.sqrt)[div.data.otu$site == "stool", div.data.otu$site == "stool"])
+
+Jaccard_w<- dist.betadiv.OPEN[["Jaccard_w"]]
+Jaccard_w.saliva <- as.dist(as.matrix(Jaccard_w)[div.data.otu$site == "oral cavity", div.data.otu$site == "oral cavity"])
+Jaccard_w.stool <- as.dist(as.matrix(Jaccard_w)[div.data.otu$site == "stool", div.data.otu$site == "stool"])
+
+TINA_uw<- dist.betadiv.OPEN[["TINA_uw"]]
+TINA_uw.saliva <- as.dist(as.matrix(TINA_uw)[div.data.otu$site == "oral cavity", div.data.otu$site == "oral cavity"])
+TINA_uw.stool <- as.dist(as.matrix(TINA_uw)[div.data.otu$site == "stool", div.data.otu$site == "stool"])
+
+TINA_w<- dist.betadiv.OPEN[["TINA_w"]]
+TINA_w.saliva <- as.dist(as.matrix(TINA_w)[div.data.otu$site == "oral cavity", div.data.otu$site == "oral cavity"])
+TINA_w.stool <- as.dist(as.matrix(TINA_w)[div.data.otu$site == "stool", div.data.otu$site == "stool"])
+
+# double check:
+rownames(as.matrix(TINA_w)[div.data.otu$site == "stool", div.data.otu$site == "stool"])
+rownames(as.matrix(TINA_w)[div.data.otu$site == "oral cavity", div.data.otu$site == "oral cavity"])
+
+```
+
+# 2) check that the data is ordered:
+
+```{r}
+
+##choose right data set according to sites:
+
+data.sample_ST<-subset(div.data.otu, div.data.otu$site=="stool") # metadata for oral samples
+data.sample_OR<-subset(div.data.otu, div.data.otu$site=="oral cavity") # metadata for stool samples
+
+# add first the disease status variable:
+div.data.otu$Disease.status <- recode(div.data.otu$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+data.sample <- div.data.otu
+data.sample <- data.sample[rownames(as.matrix(Bray)), ] # order metadata the same as beta-distance matrix
+
+data.sample_OR <- data.sample[rownames(as.matrix(Bray.saliva)), ] # order oral metadata the same as beta-distance matrix; there are 455 saliva samples
+
+data.sample_ST <- data.sample[rownames(as.matrix(Bray.stool)), ] # order stool metadata the same as beta-distance matrix; there are 118 stool samples
+
+# to double check:
+
+rownames(as.matrix(Bray.stool))
+data.sample_ST$sample.name
+
+rownames(as.matrix(Bray.saliva))
+data.sample_OR$sample.name
+
+# check again that this everything was well ordered
+identical(rownames(as.matrix(Bray.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_uw.saliva)), as.character(data.sample_OR$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_uw.stool)), as.character(data.sample_ST$sample.name)) # TRUE
+identical(rownames(as.matrix(Jaccard_w.stool)), as.character(data.sample_ST$sample.name)) # TRUE
+
+identical(rownames(as.matrix(Bray)), as.character(data.sample$sample.name)) # TRUE
+identical(rownames(as.matrix(Bray)), rownames(data.sample)) # TRUE
+
+
+```
+
+
+# make again sure that ordering was well performed:
+
+```{r}
+# make sure that ordering was well performed; for otu data:
+identical(rownames(as.matrix(Bray)), as.character(div.data.otu$sample.name))
+identical(rownames(as.matrix(Bray)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Bray.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Bray.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(Bray.sqrt)), as.character(div.data.otu$sample.name))
+identical(rownames(as.matrix(Bray.sqrt)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Bray.sqrt.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Bray.sqrt.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(Jaccard_w)), as.character(div.data.otu$sample.name))
+identical(rownames(as.matrix(Jaccard_w)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(Jaccard_w.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(Jaccard_w.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(TINA_uw)), as.character(div.data.otu$sample.name))
+identical(rownames(as.matrix(TINA_uw)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(TINA_uw.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_uw.stool)), as.character(data.sample_ST$sample.name))
+
+identical(rownames(as.matrix(TINA_w)), as.character(div.data.otu$sample.name))
+identical(rownames(as.matrix(TINA_w)), as.character(data.sample$sample.name))
+identical(rownames(as.matrix(TINA_w.saliva)), as.character(data.sample_OR$sample.name))
+identical(rownames(as.matrix(TINA_w.stool)), as.character(data.sample_ST$sample.name))
+
+
+```
+
+# get the global plots and by site using the above code! For this, we need to get the TINA-specific distances as well:
+
+
+## Get TINA site-specific as well:
+
+```{r}
+
+# for the OPEN data:
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_EligibleSALIVA.Rdata")
+dist.betadiv.saliva<-lapply(beta.div, as.dist) # uncomment for OPEN data
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_EligibleSTOOL.Rdata")
+dist.betadiv.stool<-lapply(beta.div, as.dist) # uncomment for OPEN data
+
+# extract the distances:
+
+TINA_uw.saliva2<- dist.betadiv.saliva[["TINA_uw"]]
+TINA_w.saliva2<- dist.betadiv.saliva[["TINA_w"]]
+
+TINA_uw.stool2<- dist.betadiv.stool[["TINA_uw"]]
+TINA_w.stool2<- dist.betadiv.stool[["TINA_w"]]
+
+# reorder to have the samples as data.sample:
+
+TINA_uw.saliva2<-as.dist(as.matrix(TINA_uw.saliva2)[rownames(data.sample_OR), rownames(data.sample_OR)])
+TINA_w.saliva2<-as.dist(as.matrix(TINA_w.saliva2)[rownames(data.sample_OR), rownames(data.sample_OR)])
+
+TINA_uw.stool2<-as.dist(as.matrix(TINA_uw.stool2)[rownames(data.sample_ST), rownames(data.sample_ST)])
+TINA_w.stool2<-as.dist(as.matrix(TINA_w.stool2)[rownames(data.sample_ST), rownames(data.sample_ST)])
+
+# make sure that ordering was well performed
+identical(rownames(as.matrix(TINA_uw.stool2)), as.character(data.sample_ST$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_w.stool2)), as.character(data.sample_ST$sample.name)) # TRUE
+
+identical(rownames(as.matrix(TINA_uw.saliva2)), as.character(data.sample_OR$sample.name)) # TRUE
+identical(rownames(as.matrix(TINA_w.saliva2)), as.character(data.sample_OR$sample.name)) # TRUE
+
+# extract the pcoa
+
+pcoa.salivaTINA_w2 <- pcoa(TINA_w.saliva2) # site-specific
+pcoa.stoolTINA_w2 <- pcoa(TINA_w.stool2) # site-specific
+pcoa.salivaTINA_uw2 <- pcoa(TINA_uw.saliva2) # site-specific
+pcoa.stoolTINA_uw2 <- pcoa(TINA_uw.stool2) # site-specific
+
+```
+
+
+### TRY TSNE plots:
+
+```{r}
+
+#library(devtools)
+#install_github("opisthokonta/tsnemicrobiota")
+library(phyloseq)
+library(tsnemicrobiota)
+library(ggplot2)
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# load the otudata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+
+#######################
+## start with ASV data
+#######################
+
+t.asv<-as.data.frame(t(t.asv.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.ASV[otu.data.ASV$ASV_name %in% rownames(t.asv) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$ASV_name
+
+otdata<-otdata[rownames(t.asv),]
+
+# to check:
+identical(rownames(otdata), rownames(t.asv)) # TRUE
+
+# put everyting as matrix
+
+class(t.asv) # matrix
+
+ot<-as.matrix(t.asv) # rename
+
+otdata = as.matrix(otdata)
+
+class(otdata)
+
+
+dim(otdata)
+dim(ot)
+
+
+# put all otu_table variables as numeric
+#ot = data.matrix(otu_table, rownames.force = NA)
+
+# Now tell phyloseq to combine them into a phyloseq object.
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+
+# verify sample match to add metadata to the phyloseq object
+#aa is otu_table reshared
+
+aa<-as.data.frame(t(t.asv))
+
+identical(rownames(div.data.asv), rownames(aa))
+# is FALSE, so reorder!
+
+rownames(div.data.asv)<-div.data.asv$sample.name
+
+data.sample <- div.data.asv[rownames(aa), ]
+
+identical(rownames(data.sample), rownames(aa)) # this is now true
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(data.sample)
+
+map1$Disease.status <- recode(map1$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+physeq
+
+tsne_res <- tsne_phyloseq(physeq, distance='bray',
+  perplexity = 8, verbose=0, rng_seed = 3901)
+p1<-plot_tsne_phyloseq(physeq, tsne_res,
+  color = 'Disease.status', shape="site", title='t-SNE (Bray ASV data)')
+ggsave(p1, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Plots/tsne_BrayASVplot.pdf")
+
+# do the same by site:
+
+# stool samples:
+physeqST = subset_samples(physeq, site=="stool")
+physeqST
+
+tsne_res <- tsne_phyloseq(physeqST, distance='bray',
+  perplexity = 8, verbose=0, rng_seed = 10000)
+p1<-plot_tsne_phyloseq(physeqST, tsne_res,
+  color = 'Disease.status', title='t-SNE (Bray ASV data)')
+ggsave(p1, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Plots/tsne_STOOLBrayASVplot.pdf")
+
+# saliva samples:
+physeqOR = subset_samples(physeq, site=="oral cavity")
+physeqOR
+
+tsne_res <- tsne_phyloseq(physeqOR, distance='bray',
+  perplexity = 10, verbose=0, rng_seed = 5000)
+p1<-plot_tsne_phyloseq(physeqOR, tsne_res,
+  color = 'Disease.status', title='t-SNE (Bray ASV data)')
+ggsave(p1, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Plots/tsne_SALIVABrayASVplot.pdf")
+
+```
+
+
