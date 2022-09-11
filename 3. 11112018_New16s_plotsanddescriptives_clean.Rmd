@@ -1,0 +1,670 @@
+---
+title: "Descriptives and plots of new 16s data"
+author: "Esther Molina"
+date: "12 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#--------------------------------------------------
+## Taxa plots scripts
+#--------------------------------------------------
+
+# Set the environment.
+
+```{r}
+
+library(car)
+library(stats)
+library(graphics)
+library(grDevices)
+library(utils)
+library(datasets)
+library(methods)
+library(base)
+library(Biobase)
+library(ggplot2)
+library(RColorBrewer)
+library(mixOmics)
+library(gplots)
+#library("ALL")
+library("RColorBrewer")
+library("reshape2")
+library("ggplot2")
+library("phyloseq")
+library("vegan")
+library("plyr")
+library("gridExtra")
+
+```
+
+#Load the data:
+
+```{r}
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 795 samples
+#save(data.sample, file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779_correct).RData")
+
+# otutables and data
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otutableASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otutableOPEN(N=779).RData")
+
+
+
+### ------------------------------------------- ###
+# load the filtered diversity data:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredOPEN.RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredOPEN_rel.RData")
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredASV.RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredASV_rel.RData")
+
+dim(t.asv)
+dim(t.otu)
+
+## load the calculated diversity tables
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_ASV_diversity.RData")
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_OTU_diversity.RData")
+
+
+data.sample$status[data.sample$casecontrol==0]<-"control"
+data.sample$status[data.sample$casecontrol==1]<-"cancer"
+data.sample$status[data.sample$casecontrol==2]<-"pancreatitis"
+
+
+```
+
+
+## Get the phyloseq object
+
+
+```{r phyloseq object}
+
+dim(t.asv)
+dim(t.otu)
+
+class(t.asv) # matrix
+class(t.otu) # matrix
+
+#######################
+## start with ASV data
+#######################
+
+# consider the taxonomy table:
+otdata<-otu.data.ASV[rownames(t.asv) %in% otu.data.ASV$ASV_name,] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$ASV_name
+
+otdata<-otdata[rownames(t.asv),]
+
+# to check:
+identical(rownames(otdata), rownames(t.asv)) # TRUE
+
+# put everyting as matrix
+
+class(t.asv) # matrix
+
+ot<-t.asv # rename
+
+otdata = as.matrix(otdata)
+
+class(otdata)
+
+
+dim(otdata)
+dim(ot)
+
+
+# put all otu_table variables as numeric
+#ot = data.matrix(otu_table, rownames.force = NA)
+
+# Now tell phyloseq to combine them into a phyloseq object.
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+#aa is otu_table reshared
+
+aa<-as.data.frame(t(t.asv))
+
+identical(rownames(data.sample), rownames(aa))
+# is FALSE, so reorder!
+
+data.sample <- data.sample[rownames(aa), ]
+
+identical(rownames(data.sample), rownames(aa)) # this is now true
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(data.sample)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+physeq
+
+#phyloseq-class experiment-level object
+#otu_table()   OTU Table:         [ 3393 taxa and 605 samples ]
+#sample_data() Sample Data:       [ 605 samples by 50 sample variables ]
+#tax_table()   Taxonomy Table:    [ 3393 taxa by 10 taxonomic ranks ]
+
+
+#######################
+## the same with OPEN data
+#######################
+
+# consider the taxonomy table:
+otdata<-otu.data.OPEN[rownames(t.otu) %in% otu.data.OPEN$OTU_name,] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$OTU_name
+
+otdata<-otdata[rownames(t.otu),]
+
+# to check:
+identical(rownames(otdata), rownames(t.otu)) # TRUE
+
+# put everyting as matrix
+
+class(t.otu) # matrix
+
+ot<-t.otu # rename
+
+otdata = as.matrix(otdata)
+
+class(otdata)
+
+
+dim(otdata)
+dim(ot)
+
+
+# put all otu_table variables as numeric
+#ot = data.matrix(otu_table, rownames.force = NA)
+
+# Now tell phyloseq to combine them into a phyloseq object.
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+#aa is otu_table reshared
+
+aa<-as.data.frame(t(t.otu))
+
+identical(rownames(data.sample), rownames(aa))
+
+# is FALSE, so reorder!
+
+data.sample <- data.sample[rownames(aa), ]
+
+identical(rownames(data.sample), rownames(aa)) # this is now true
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(data.sample)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+
+
+```
+
+
+
+# get some statitiscs from the phyloseq object:
+
+```{r}
+ntaxa(physeq) # get the number of taxa: 3393 for ASV ans 853 for OPEN
+# this retrieves the number of species with known reference data
+
+min(sample_sums(physeq))
+mean(sample_sums(physeq))
+max(sample_sums(physeq))
+
+# for the ASV data:
+# ntaxa(physeq)
+#[1] 3393
+# min(sample_sums(physeq)) # min number of taxa in samples
+#[1] 423
+# mean(sample_sums(physeq)) # mean taxa
+#[1] 11071.01
+# max(sample_sums(physeq)) # max taxa 
+#[1] 101141
+
+# for the OPEN DATA:
+# ntaxa(physeq) # get the number of taxa: 3393 for ASV
+#[1] 852
+# min(sample_sums(physeq))
+#[1] 401
+# mean(sample_sums(physeq))
+#[1] 12710.54
+# max(sample_sums(physeq))
+#[1] 130365
+
+plot_richness(physeq, x="status", measures=c("Chao1", "Shannon"))
+
+rank_names(physeq)
+## ASV
+# [1] "ASV_name"           "size"               "domain"             "phylum"            
+# [5] "class"              "order"              "family"             "genus"             
+# [9] "species"            "consensus_taxonomy"
+
+## OPEN
+# [1] "OTU_name"           "size"               "domain"             "phylum"            
+# [5] "class"              "order"              "family"             "genus"             
+# [9] "species"            "consensus_taxonomy"
+
+get_taxa_unique(physeq, "phylum")
+## ASV
+# [1] "Firmicutes"         "Spirochaetes"       "Proteobacteria"     "Cyanobacteria"     
+# [5] "Verrucomicrobia"    "Tenericutes"        "Bacteroidetes"      NA                  
+# [9] "PHY_Coriobacteriia" "Synergistetes"      "Actinobacteria"     "Fusobacteria" 
+
+## OPEN:
+# [1] "Bacteroidetes"   "Firmicutes"      "Cyanobacteria"   "Actinobacteria" 
+# [5] "Fusobacteria"    "Proteobacteria"  NA                "Synergistetes"  
+# [9] "Spirochaetes"    "Verrucomicrobia" "Tenericutes"     "Lentisphaerae"  
+# [13] "Chloroflexi"   
+
+get_taxa_unique(physeq, "genus")
+
+## ASV 
+# [1] "Veillonella"           NA                      "Treponema"            
+# [4] "Rubidibacter"          "Moraxella"             "Akkermansia"          
+# [7] "Mycoplasma"            "Paraprevotella"        "Coprobacter"          
+#[10] "Prevotella"            "Alloprevotella"        "Alistipes"            
+#[13] "Porphyromonas"         "Bacteroides"           "Barnesiella"          
+#[16] "Capnocytophaga"        "Phocaeicola"           "Odoribacter"          
+#[19] "Tannerella"            "Parabacteroides"       "Eubacterium"          
+#[22] "Succinivibrio"         "Desulfovibrio"         "Campylobacter"        
+#[25] "Cardiobacterium"       "Haemophilus"           "Desulfobulbus"        
+#[28] "Butyricimonas"         "Megamonas"             "Butyricicoccus"       
+#[31] "Clostridium"           "Ruminococcus"          "Eggerthella"          
+#[34] "Pyramidobacter"        "Bifidobacterium"       "Actinomyces"          
+#[37] "Rothia"                "Mobiluncus"            "Pseudoramibacter"     
+#[40] "Filifactor"            "Anaerostipes"          "Mogibacterium"        
+#[43] "Atopobium"             "Lachnoanaerobaculum"   "Stomatobaculum"       
+#[46] "Catonella"             "Oribacterium"          "Coprococcus"          
+#[49] "Slackia"               "Collinsella"           "Fretibacterium"       
+#[52] "Terrisporobacter"      "Peptostreptococcus"    "Neisseria"            
+#[55] "Sutterella"            "Alloscardovia"         "Corynebacterium"      
+#[58] "Parascardovia"         "Scardovia"             "Kingella"             
+#[61] "Parasutterella"        "Streptococcus"         "Staphylococcus"       
+#[64] "Flavonifractor"        "Lactobacillus"         "Anaeroglobus"         
+#[67] "Acidaminococcus"       "Dialister"             "Gemella"              
+#[70] "Megasphaera"           "Oscillibacter"         "Granulicatella"       
+#[73] "Enterococcus"          "Turicibacter"          "Solobacterium"        
+#[76] "Selenomonas"           "Phascolarctobacterium" "Abiotrophia"          
+#[79] "Shuttleworthia"        "Howardella"            "Parvimonas"           
+#[82] "Roseburia"             "Fusobacterium"         "Leptotrichia"         
+#[85] "Propionibacterium"     
+
+## OPEN
+#  [1] "Porphyromonas"         "Lactobacillus"         "Rubidibacter"         
+#  [4] "Atopobium"             "Leptotrichia"          "Gardnerella"          
+#  [7] NA                      "Bifidobacterium"       "Haemophilus"          
+# [10] "Aggregatibacter"       "Scardovia"             "Parascardovia"        
+# [13] "Clostridium"           "Oribacterium"          "Eubacterium"          
+# [16] "Jonquetella"           "Slackia"               "Anaerococcus"         
+# [19] "Treponema"             "Alloprevotella"        "Johnsonella"          
+# [22] "Prevotella"            "Alistipes"             "Megamonas"            
+# [25] "Solobacterium"         "Capnocytophaga"        "Paraprevotella"       
+# [28] "Actinomyces"           "Parabacteroides"       "Mogibacterium"        
+# [31] "Megasphaera"           "Oscillibacter"         "Dialister"            
+# [34] "Phascolarctobacterium" "Sutterella"            "Succinivibrio"        
+# [37] "Ruminococcus"          "Ochrobactrum"          "Bacteroides"          
+# [40] "Coprococcus"           "Flavonifractor"        "Collinsella"          
+# [43] "Howardella"            "Anaerostipes"          "Butyricicoccus"       
+# [46] "Catenibacterium"       "Akkermansia"           "Streptococcus"        
+# [49] "Brevundimonas"         "Propionibacterium"     "Neisseria"            
+# [52] "Delftia"               "Gordonibacter"         "Weissella"            
+# [55] "Selenomonas"           "Campylobacter"         "Desulfovibrio"        
+# [58] "Blautia"               "Coprobacter"           "Barnesiella"          
+# [61] "Allisonella"           "Acidaminococcus"       "Parvimonas"           
+# [64] "Eggerthella"           "Eggerthia"             "Odoribacter"          
+# [67] "Butyricimonas"         "Rothia"                "Peptostreptococcus"   
+# [70] "Stomatobaculum"        "Mycoplasma"            "Tannerella"           
+# [73] "Cardiobacterium"       "Fretibacterium"        "Lachnoanaerobaculum"  
+# [76] "Moryella"              "Fusobacterium"         "Finegoldia"           
+# [79] "Catonella"             "Alloscardovia"         "Veillonella"          
+# [82] "Corynebacterium"       "Sneathia"              "Anaeroglobus"         
+# [85] "Coprobacillus"         "Pyramidobacter"        "Olsenella"            
+# [88] "Mitsuokella"           "Anaerotruncus"         "Shuttleworthia"       
+# [91] "Abiotrophia"           "Gemella"               "Streptobacillus"      
+# [94] "Phocaeicola"           "Moraxella"             "Kingella"             
+# [97] "Pseudoramibacter"      "Turicibacter"          "Roseburia"            
+#[100] "Parasutterella"        "Victivallis"           "Acinetobacter"        
+#[103] "Granulicatella"        "Enterococcus"          "Pseudomonas"          
+#[106] "Mobiluncus"            "Filifactor"            "Staphylococcus"       
+#[109] "Desulfomicrobium"      "Achromobacter"        
+
+aa<-get_taxa_unique(physeq, "species") 
+# only 121 species are unique in ASV
+# only 151 species are unique in OPEN
+
+# filter taxa #############################################
+
+# prune OTUs that are not present in at least one sample
+GP = prune_taxa(taxa_sums(physeq) > 0, physeq) # should not be any as all samples were filtered before
+ntaxa(GP) # TRUE; so we can remove GP
+rm(GP)
+
+# prune OTUs to the most prevalent ones
+# first transform the data to the relative abundance
+
+physeq1  = transform_sample_counts(physeq, function(x) x / sum(x) )
+physeq2<-transform_sample_counts(physeq, function(OTU) OTU/sum(OTU) ) # this is exactly the same as before
+ntaxa(physeq1)
+
+
+#Remove taxa not seen more than 3 times in at least 20% of the samples. This protects against an OTU with small mean & trivially large C.V.
+#GP = filter_taxa(physeq1, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+#ntaxa(GP)
+#print(GP)
+
+#sample_sums(GP)
+#ntaxa(GlobalPatterns)
+
+# Apply rarefaction with rarefy_even_depth:
+# this downsamples all samples to the same depth and prunes otus that disappear from all samples as a result:
+#physeq3 <- rarefy_even_depth(physeq, rngseed = 1121983)
+#sample_sums(physeq3)[1:5]
+
+# extract the 500 most abundand taxa
+physeq4<-prune_taxa(names(sort(taxa_sums(physeq), TRUE)[1:500]), physeq) # the most abundant taxa
+
+physeq5<-prune_taxa(names(sort(taxa_sums(physeq1), TRUE)[1:500]), physeq1) # the most abundant 500 as relative counts
+
+#gp.ch = subset_taxa(physeq4, phylum=="Bacteroidetes")
+#gp.ch = subset_taxa(physeq5, phylum=="Bacteroidetes")
+
+
+
+```
+
+physeq is absolute counts and physeq1 is relative abundance and physeq4 refers to the most abundant taxa; phylose5 the same but for relative abundance data
+
+## -------------------------------------------##
+## Draw plot on abundance without phyloseq
+
+The phyloseq package has some problems in plotting relative abundances. 
+When plotting barplots where data is summarized by sample type, with the taxa/sample previously sum-normalized (0-1 scale) with sampleTransformCounts, the resulting barplot is not on a 0-1 scale and it's height represents the number of samples for that sample type. 
+Therefore, I used a modification of the code to renormalize abundances per sample type:
+
+# With STOOL data:
+
+```{r abundance plots in STOOL, echo=FALSE}
+
+gp <- prune_taxa(
+  names( sort( taxa_sums(physeq), decreasing = T )[ 1:500 ] ),
+  physeq
+)
+
+# sum-normalize
+gp.norm <- transform_sample_counts( gp, function(x) x/sum(x) )
+colSums(otu_table(gp.norm)[, 1:5] ) # all one, so OK
+
+
+#merge
+gp.norm_m <- merge_samples(gp.norm, "site")
+sample_data(gp.norm_m)$site <- factor(sample_names(gp.norm_m))
+
+#gp<-gp.norm_m@sam_data
+
+#taxa merge
+
+gp.norm_m <- tax_glom(gp.norm_m, "genus")
+
+##Transform to percentage of total available
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+#generate stacked bar plot
+
+plot_bar(gp.norm_m, fill = 'genus') +
+geom_bar( aes(color = genus, fill = genus ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") # here are all the subjects included
+
+################################################################################
+### now make plots by disease status for oral and stool samples separately:
+
+# 1) Restrict to oral cavity, and then to stool:
+
+ST <-subset(data.sample, data.sample$site=="stool") # subset the stool samples
+rownames(ST) = as.character(ST$MMPCID)
+
+# consider the taxonomy table:
+otdata
+dim(otdata)
+
+# consider the otu_table
+otST<-ot[,colnames(ot) %in% rownames(ST)]
+dim(otST)
+
+class(ot)
+
+class(otdata)
+
+# while here all taxa are included, as we will sample to the 500 most abundant species, we do not need to filter further
+
+# Now tell phyloseq to combine them into a phyloseq object.
+#library("phyloseq")
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+## aa is otu_table reshaped
+
+identical(rownames(ST), colnames(otST))
+# is TRUE, so reordering not needed!
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(ST)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+physeq # 3393 taxa for 123 samples
+
+# 2) plot bars for oral cavity only:
+
+gp <- prune_taxa(
+  names( sort( taxa_sums(physeq), decreasing = T )[ 1:500 ] ),
+  physeq
+) # for the most abundant taxa
+
+# sum-normalize
+gp.norm <- transform_sample_counts( gp, function(x) x/sum(x) )
+colSums(otu_table(gp.norm)[, 1:5] ) # all 1, so OK
+
+
+#merge
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+
+#taxa merge; start with genus
+
+gp.norm_m <- tax_glom(gp.norm_m, "genus") # in case we want to plot by genus; change for family and phylum
+
+##Transform to percentage of total available
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+## ------------------------------- ##
+#generate stacked bar plot
+
+p1<-plot_bar(gp.norm_m, fill = "genus", x="status") +
+geom_bar( aes(color = genus, fill = genus ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By genus (OPEN data)")
+p1
+
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+gp.norm_m <- tax_glom(gp.norm_m, "family") # in case we want to plot by family
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+p2<-plot_bar(gp.norm_m, fill = "family", x="status") +
+geom_bar( aes(color = family, fill = family ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By family (OPEN data)")
+p2
+
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+gp.norm_m <- tax_glom(gp.norm_m, "phylum") # in case we want to plot by phylum
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+p3<-plot_bar(gp.norm_m, fill = "phylum", x="status") +
+geom_bar( aes(color = phylum, fill = phylum ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By phylum (OPEN data)")
+p3
+
+#grid.arrange(p3, p2, p1, nrow=3)
+
+
+```
+
+# With SALIVA data:
+
+```{r abundance plots in STOOL, echo=FALSE}
+
+gp <- prune_taxa(
+  names( sort( taxa_sums(physeq), decreasing = T )[ 1:500 ] ),
+  physeq
+)
+
+# sum-normalize
+gp.norm <- transform_sample_counts( gp, function(x) x/sum(x) )
+colSums(otu_table(gp.norm)[, 1:5] ) # all one, so OK
+
+
+#merge
+gp.norm_m <- merge_samples(gp.norm, "site")
+sample_data(gp.norm_m)$site <- factor(sample_names(gp.norm_m))
+
+#gp<-gp.norm_m@sam_data
+
+#taxa merge
+
+gp.norm_m <- tax_glom(gp.norm_m, "genus")
+
+##Transform to percentage of total available
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+#generate stacked bar plot
+
+plot_bar(gp.norm_m, fill = 'genus') +
+geom_bar( aes(color = genus, fill = genus ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") # here are all the subjects included
+
+################################################################################
+### now make plots by disease status for oral and stool samples separately:
+
+# 1) Restrict to oral cavity, and then to stool:
+
+OR <-subset(data.sample, data.sample$site=="oral cavity") # subset the stool samples
+rownames(OR) = as.character(OR$MMPCID)
+
+# consider the taxonomy table:
+otdata
+dim(otdata)
+
+# consider the otu_table
+otOR<-ot[,colnames(ot) %in% rownames(OR)]
+dim(otOR)
+
+class(ot)
+
+class(otdata)
+
+# while here all taxa are included, as we will sample to the 500 most abundant species, we do not need to filter further
+
+# Now tell phyloseq to combine them into a phyloseq object.
+#library("phyloseq")
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+## aa is otu_table reshaped
+
+identical(rownames(OR), colnames(otOR))
+# is TRUE, so reordering not needed!
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(OR)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+physeq # 3393 taxa for 123 samples
+
+# 2) plot bars for oral cavity only:
+
+gp <- prune_taxa(
+  names( sort( taxa_sums(physeq), decreasing = T )[ 1:500 ] ),
+  physeq
+) # for the most abundant taxa
+
+# sum-normalize
+gp.norm <- transform_sample_counts( gp, function(x) x/sum(x) )
+colSums(otu_table(gp.norm)[, 1:5] ) # all 1, so OK
+
+
+#merge
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+
+#taxa merge; start with genus
+
+gp.norm_m <- tax_glom(gp.norm_m, "genus") # in case we want to plot by genus; change for family and phylum
+
+##Transform to percentage of total available
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+## ------------------------------- ##
+#generate stacked bar plot
+
+p1<-plot_bar(gp.norm_m, fill = "genus", x="status") +
+geom_bar( aes(color = genus, fill = genus ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By genus (OPEN data)")
+p1
+
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+gp.norm_m <- tax_glom(gp.norm_m, "family") # in case we want to plot by family
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+p2<-plot_bar(gp.norm_m, fill = "family", x="status") +
+geom_bar( aes(color = family, fill = family ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By family (OPEN data)")
+p2
+
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+gp.norm_m <- tax_glom(gp.norm_m, "phylum") # in case we want to plot by phylum
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+p3<-plot_bar(gp.norm_m, fill = "phylum", x="status") +
+geom_bar( aes(color = phylum, fill = phylum ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By phylum (OPEN data)")
+p3
+
+#grid.arrange(p3, p2, p1, nrow=3)
+
+
+```
+

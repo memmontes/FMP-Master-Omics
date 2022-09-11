@@ -1,0 +1,412 @@
+---
+title: "Alpha diversity statistics"
+author: "Esther Molina"
+date: "6 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## set the environment:
+
+```{r}
+
+library("phyloseq", warn.conflicts=F, quietly=T)
+library("ggplot2", warn.conflicts=F, quietly=T)
+library("gridExtra", warn.conflicts=F, quietly=T)
+library("permute", warn.conflicts=F, quietly=T)
+library("lattice", warn.conflicts=F, quietly=T)
+library("vegan", warn.conflicts=F, quietly=T)
+library("compareGroups", warn.conflicts=F, quietly=T)
+library("RColorBrewer")
+library("reshape2")
+library("plyr")
+
+```
+
+# load the data
+
+```{r}
+
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 795 samples
+#save(data.sample, file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779_correct).RData")
+
+# otutables and data
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otutableASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otutableOPEN(N=779).RData")
+
+data.sample<-data.sample[data.sample$MMPCID %in% colnames(otu.table.OPEN),] # FOR THE OPEN DATA
+
+### ------------------------------------------- ###
+# load the filtered diversity data:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredOPEN.RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredOPEN_rel.RData")
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredASV.RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredASV_rel.RData")
+
+dim(t.asv)
+dim(t.otu)
+
+```
+
+# load the calculated diversity files:
+
+```{r}
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_ASV_diversity.RData")
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_OTU_diversity.RData")
+```
+
+# perform some descriptives on the filtered data
+
+```{r}
+
+data.sample2<-data.sample
+data.sample<-data.sample[rownames(data.sample) %in% div.rarefied.asv$sample.name,] # for the ASV table
+
+data.sample<-data.sample2
+data.sample<-data.sample[rownames(data.sample) %in% div.rarefied.otu$sample.name,] # for the OPEN table
+
+data.sample$duplicate<-as.factor(data.sample$duplicate)
+data.sample$center<-as.factor(data.sample$center)
+data.sample$sex<-as.factor(data.sample$sex)
+data.sample$casecontrol<-as.factor(data.sample$casecontrol)
+
+res <- compareGroups(casecontrol ~ site+method+RUN+final_eligibility+duplicate+center+sex+agec, data=data.sample, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+res <- compareGroups(site ~casecontrol+method+RUN+final_eligibility+duplicate+center+sex+agec, data=data.sample, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+```
+
+# format the otu and asv data:
+```{r}
+
+data.otu<-otu.data.OPEN[otu.data.OPEN$OTU_name %in% rownames(t.otu), ] # for the OPEN 
+data.asv<-otu.data.OPEN[otu.data.ASV$ASV_name %in% rownames(t.asv), ] # for the ASV
+
+data.sample.otu<-data.sample[rownames(data.sample) %in% div.rarefied.otu$sample.name,] # for the OPEN OTU table
+data.sample.asv<-data.sample[rownames(data.sample) %in% div.rarefied.asv$sample.name,] # for the ASV table
+
+dim(data.otu)
+dim(data.asv)
+
+
+# merge diversity data with metadata
+
+div.data.asv<-merge(div.rarefied.asv, data.sample.asv, by.x="sample.name", by.y="MMPCID")
+div.data.otu<-merge(div.rarefied.otu, data.sample.otu, by.x="sample.name", by.y="MMPCID")
+
+div.data.asv$status[div.data.asv$casecontrol==0]<-"control"
+div.data.asv$status[div.data.asv$casecontrol==1]<-"cancer"
+div.data.asv$status[div.data.asv$casecontrol==2]<-"pancreatitis"
+
+div.data.otu$status[div.data.otu$casecontrol==0]<-"control"
+div.data.otu$status[div.data.otu$casecontrol==1]<-"cancer"
+div.data.otu$status[div.data.otu$casecontrol==2]<-"pancreatitis"
+
+div.data.asvEleg<-subset(div.data.asv, div.data.asv$final_eligibility=="ELIGIBLE")
+div.data.otuEleg<-subset(div.data.otu, div.data.otu$final_eligibility=="ELIGIBLE")
+
+# save everything:
+
+save(data.asv, file="D:/EMBL_STAY/DATA/AllSequenced16sData/08112018_ASV_DATA(tax table).RData")
+save(data.otu, file="D:/EMBL_STAY/DATA/AllSequenced16sData/08112018_OTU_DATA(tax table).RData")
+
+save(data.sample.otu, file="D:/EMBL_STAY/DATA/AllSequenced16sData/08112018_OTU_metadata(N=613).RData")
+save(data.sample.asv, file="D:/EMBL_STAY/DATA/AllSequenced16sData/08112018_ASV_metadata(N=605).RData")
+
+save(div.data.otu, file="D:/EMBL_STAY/DATA/AllSequenced16sData/08112018_OTU_diversmetadata(N=613).RData")
+save(div.data.asv, file="D:/EMBL_STAY/DATA/AllSequenced16sData/08112018_ASV_diversmetadata(N=605).RData")
+
+
+```
+
+
+
+# Perform alpha-diversity plots:
+
+```{r individually}
+
+############# BOX PLOTS with ggplot2
+
+# set the workind directory to plot all plots here:
+setwd("D:/EMBL_STAY/NEW 16s RUN")
+
+fill <- "gold1"
+line <- "goldenrod2"
+p10 <- ggplot(div.data.asvEleg, aes(x = site, y = q.0)) +
+  geom_boxplot(fill = fill, colour = line, alpha=0.7, notch=F)
+p10 <- p10 + scale_x_discrete(name = "Type of sample") +
+  scale_y_continuous(name = "Richness (q=0)")
+p10 <- p10 + ggtitle("Richness")
+#p10 <- p10 + geom_jitter()
+p10 <- p10 + theme_bw() +
+   theme(plot.title = element_text(size = 10, face = "bold"))
+p10
+
+fill <- "chartreuse3"
+line <- "chartreuse4"
+p11 <- ggplot(div.data.asvEleg, aes(x = site, y = q.1)) +
+  geom_boxplot(fill = fill, colour = line, alpha=0.7)
+p11 <- p11 + scale_x_discrete(name = "Type of sample") +
+  scale_y_continuous(name = "Alpha-Diversity (q=1)")
+p11 <- p11 + ggtitle("Diversity exp(Shannon)")
+#p10 <- p10 + geom_jitter()
+p11 <- p11 + theme_bw() +
+   theme(plot.title = element_text(size = 10, face = "bold"))
+p11
+
+fill <- "deepskyblue3"
+line <- "deepskyblue4"
+p12 <- ggplot(div.data.asvEleg, aes(x = site, y = q.2)) +
+  geom_boxplot(fill = fill, colour = line, alpha=0.7)
+p12 <- p12 + scale_x_discrete(name = "Type of sample") +
+  scale_y_continuous(name = "Alpha-Diversity (q=2)")
+p12 <- p12 + ggtitle("Diversity inv(Simpson)")
+#p10 <- p10 + geom_jitter()
+p12 <- p12 + theme_bw() +
+ theme(plot.title = element_text(size = 10, face = "bold"))
+p12
+
+#pdf("D:/EMBL_STAY/NEW 16s RUN/08112018plot_diversity_bySite_ASVElegibles.pdf")
+png("D:/EMBL_STAY/NEW 16s RUN/08112018plot_diversity_bySite_ASVElegibles.png")
+grid.arrange( p10, p11, p12, ncol=3)
+dev.off()
+#ggsave("plot_diversityWODuplicates.pdf", arrangeGrob(p10,p11,p12))
+
+## Removed 47 rows containing non-finite values!!
+
+## By disease status:
+
+fill <- "gold1"
+line <- "goldenrod2"
+p10 <- ggplot(div.data.asvEleg, aes(x = status, y = q.0)) +
+  geom_boxplot(fill = fill, colour = line, alpha=0.7, notch=F)
+p10 <- p10 + scale_x_discrete(name = "Disease status") +
+  scale_y_continuous(name = "Richness (q=0)")
+p10 <- p10 + ggtitle("Richness")
+#p10 <- p10 + geom_jitter()
+p10 <- p10 + theme_bw() +
+     theme(plot.title = element_text(size = 10, face = "bold"))
+p10
+
+fill <- "chartreuse3"
+line <- "chartreuse4"
+p11 <- ggplot(div.data.asvEleg, aes(x = status, y = q.1)) +
+  geom_boxplot(fill = fill, colour = line, alpha=0.7)
+p11 <- p11 + scale_x_discrete(name = "Disease status") +
+  scale_y_continuous(name = "Alpha-Diversity (q=1)")
+p11 <- p11 + ggtitle("Diversity exp(Shannon)")
+#p10 <- p10 + geom_jitter()
+p11 <- p11 + theme_bw() +
+  theme(plot.title = element_text(size = 10, face = "bold"))
+p11
+
+fill <- "deepskyblue3"
+line <- "deepskyblue4"
+p12 <- ggplot(div.data.asvEleg, aes(x = status, y = q.2)) +
+  geom_boxplot(fill = fill, colour = line, alpha=0.7)
+p12 <- p12 + scale_x_discrete(name = "Disease status") +
+  scale_y_continuous(name = "Alpha-Diversity (q=2)")
+p12 <- p12 + ggtitle("Diversity inv(Simpson)")
+#p10 <- p10 + geom_jitter()
+p12 <- p12 + theme_bw() +
+     theme(plot.title = element_text(size = 10, face = "bold"))
+p12
+
+pdf("D:/EMBL_STAY/NEW 16s RUN/08112018plot_diversity_byStatus_ASVElegibles.pdf")
+#png("D:/EMBL_STAY/NEW 16s RUN/08112018plot_diversity_byStatus_ASVElegibles.png")
+grid.arrange( p10, p11, p12, ncol=3)
+dev.off()
+#ggsave("plot_diversity.pdf", arrangeGrob(p10,p11,p12))
+
+## Removed 47 rows containing non-finite values!!
+
+```
+
+## Combined plots by site and status
+
+```{r}
+
+p10 <- ggplot(div.data.asvElegOut, aes(x = status, y = q.0, fill = site)) +
+  geom_boxplot(alpha=0.5) +
+  scale_y_continuous(name = "Richness (q=0)") + 
+                     #breaks = seq(0, 175, 25)) +
+                     #limits=c(0, 175)) +
+  scale_x_discrete(name = "Diseases status") +
+                   #labels=c("cases", "controls", "pancreatitis")
+  ggtitle("Boxplot of diversity by disease status and site") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        text = element_text(size = 8),
+        axis.title = element_text(face="bold"),
+        axis.text.x=element_text(size = 7)) +
+  scale_fill_brewer(palette = "Accent")
+p10
+#ggsave("C:/Users/memolina/Documents/EMBL_STAY/16SLabResults/09102017plot_richnessByStatusSiteEligibleWODuplicates(N=258).pdf", width=5, height=5)
+
+p11 <- ggplot(div.data.asvEleg, aes(x = status, y = q.1, fill = site)) +
+  geom_boxplot(alpha=0.5) +
+  scale_y_continuous(name = "Alpha-Diversity (q=1)-exp(Shannon)") + 
+  #breaks = seq(0, 175, 25)) +
+  #limits=c(0, 175)) +
+  scale_x_discrete(name = "Diseases status") +
+  #labels=c("cases", "controls", "pancreatitis")
+  ggtitle("Boxplot of diversity by disease status and site") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        text = element_text(size = 8),
+        axis.title = element_text(face="bold"),
+        axis.text.x=element_text(size = 7)) +
+  scale_fill_brewer(palette = "Accent")
+p11
+#ggsave("C:/Users/memolina/Documents/EMBL_STAY/16SLabResults/09102017plot_DivShannonByStatusSiteEligibleWODuplicates(N=258).pdf", width=5, height=5)
+
+p12 <- ggplot(div.data.asvEleg, aes(x = status, y = q.2, fill = site)) +
+  geom_boxplot(alpha=0.5) +
+  scale_y_continuous(name = "Alpha-Diversity (q=2)-inv(Simpson)") + 
+                       #breaks = seq(0, 175, 25)) +
+                       #limits=c(0, 175)) +
+                       scale_x_discrete(name = "Diseases status") +
+                       #labels=c("cases", "controls", "pancreatitis")
+                       ggtitle("Boxplot of diversity by disease status and site") +
+                       theme_bw() +
+                       theme(plot.title = element_text(size = 10, face = "bold"),
+                             text = element_text(size = 8),
+                             axis.title = element_text(face="bold"),
+                             axis.text.x=element_text(size = 7)) +
+                       scale_fill_brewer(palette = "Accent")
+p12
+#ggsave("C:/Users/memolina/Documents/EMBL_STAY/16SLabResults/09102017plot_DivSimpsonByStatusSiteEligibleWODuplicates(N=258).pdf", width=5, height=5)
+
+
+```
+
+## Alpha Diversity Plots combined
+
+```{r alphadiversity plots}
+
+## ASV data
+# subset by data to diversity indexes and data by site
+names(div.data.asv)
+HILL<-div.data.asv[,c("site", "status", "q.0", "q.1", "q.2")]
+HILL_ST<-subset(HILL, HILL$site=="stool")
+HILL_OR<-subset(HILL, HILL$site=="oral cavity")
+
+colnames(HILL_ST) = c("site","status", "Richness","exp(Shanon)","inv(Simpson)")
+colnames(HILL_OR) = c("site", "status", "Richness","exp(Shanon)","inv(Simpson)")
+plot_ST= melt(HILL_ST)
+plot_OR= melt(HILL_OR)
+
+#plotting
+pST <- ggplot(data = plot_ST, aes(x=variable, y=value))
+pST <- pST + geom_boxplot(aes(fill = status)) +
+         geom_point(aes(y=value, group=status), position = position_dodge(width=0.75)) +
+         facet_wrap( ~ variable, scales="free_x") +
+         xlab("") + ylab("alpha diversity measure") + ggtitle("Alpha Diversity Pattern in Stool Samples")+
+         theme(plot.title = element_text(size = 15, face = "bold"))
+pOR <- ggplot(data = plot_OR, aes(x=variable, y=value))
+pOR <- pOR + geom_boxplot(aes(fill = status)) +
+         geom_point(aes(y=value, group=status), position = position_dodge(width=0.75)) +
+         facet_wrap( ~ variable, scales="free_x") +
+         xlab("") + ylab("alpha diversity measure") + ggtitle("Alpha Diversity Pattern in Oral Samples")+
+        theme(plot.title = element_text(size = 15, face = "bold"))
+
+ggsave(pST, filename="D:/EMBL_STAY/NEW 16s RUN/Alpha Diversity Pattern in Stool Samples_ASV.pdf", width = 10, height=10)
+ggsave(pST, filename="D:/EMBL_STAY/NEW 16s RUN/Alpha Diversity Pattern in Stool Samples_ASV.png", width = 10, height=10)
+ggsave(pOR, filename="D:/EMBL_STAY/NEW 16s RUN/Alpha Diversity Pattern in Oral Samples_ASV.pdf", width = 10, height=10)
+ggsave(pOR, filename="D:/EMBL_STAY/NEW 16s RUN/Alpha Diversity Pattern in Oral Samples_ASV.png", width = 10, height=10)
+
+
+## OPEN OTU data
+
+names(div.data.otu)
+HILL<-div.data.otu[,c("site", "status", "q.0", "q.1", "q.2")]
+HILL_ST<-subset(HILL, HILL$site=="stool")
+HILL_OR<-subset(HILL, HILL$site=="oral cavity")
+
+colnames(HILL_ST) = c("site","status", "Richness","exp(Shanon)","inv(Simpson)")
+colnames(HILL_OR) = c("site", "status", "Richness","exp(Shanon)","inv(Simpson)")
+plot_ST= melt(HILL_ST)
+plot_OR= melt(HILL_OR)
+
+#plotting
+pST <- ggplot(data = plot_ST, aes(x=variable, y=value))
+pST <- pST + geom_boxplot(aes(fill = status)) +
+         geom_point(aes(y=value, group=status), position = position_dodge(width=0.75)) +
+         facet_wrap( ~ variable, scales="free_x") +
+         xlab("") + ylab("alpha diversity measure") + ggtitle("Alpha Diversity Pattern in Stool Samples")+
+         theme(plot.title = element_text(size = 15, face = "bold"))
+pOR <- ggplot(data = plot_OR, aes(x=variable, y=value))
+pOR <- pOR + geom_boxplot(aes(fill = status)) +
+         geom_point(aes(y=value, group=status), position = position_dodge(width=0.75)) +
+         facet_wrap( ~ variable, scales="free_x") +
+         xlab("") + ylab("alpha diversity measure") + ggtitle("Alpha Diversity Pattern in Oral Samples")+
+        theme(plot.title = element_text(size = 15, face = "bold"))
+
+ggsave(pST, filename="D:/EMBL_STAY/NEW 16s RUN/Alpha Diversity Pattern in Stool Samples_OTU.pdf", width = 10, height=10)
+ggsave(pST, filename="D:/EMBL_STAY/NEW 16s RUN/Alpha Diversity Pattern in Stool Samples_OTU.png", width = 10, height=10)
+ggsave(pOR, filename="D:/EMBL_STAY/NEW 16s RUN/Alpha Diversity Pattern in Oral Samples_OTU.pdf", width = 10, height=10)
+ggsave(pOR, filename="D:/EMBL_STAY/NEW 16s RUN/Alpha Diversity Pattern in Oral Samples_OTU.png", width = 10, height=10)
+
+```
+
+# some samples have extremely and unreasonable high diversity. These are outliers!!
+# select those samples and have a deeper look:
+
+```{r}
+
+div.data.asv[,c("sample.name", "q.0", "q.1","q.2")]
+
+outliersdiv<-subset(div.data.asv, div.data.asv$q.0==1) # 10 observations
+missingdiv<-subset(div.data.asv, is.na(div.data.asv$q.0)) # 47 observations
+
+outliersdivotu<-subset(div.data.otu, div.data.otu$q.0==1) # 10 observations
+
+
+## remove those outliers
+
+div.data.asvElegOut<-subset(div.data.asvEleg, div.data.asvEleg$q.0!=1 & div.data.asvEleg$q.1!=1 | is.na(div.data.asvEleg$q.0))
+
+div.data.otuElegOut<-subset(div.data.otuEleg, div.data.otuEleg$q.0!=1 & div.data.otuEleg$q.1!=1 | is.na(div.data.otuEleg$q.0))
+
+# the samples that were outliers are:
+outliersdiv$sample.name # in ASV
+ "MMPC10956968OR" "MMPC19566263OR" "MMPC45254525OR" "MMPC52426076OR" "MMPC65638176OR" "MMPC76524248OR"
+ "MMPC89394878OR" "MMPC89717189OR" "MMPC94657810OR" "MMPC97687292OR"
+
+ outliersdivotu$sample.name # in OPEN OTU
+"MMPC17945462OR" "MMPC46842363OR" "MMPC55182682OR" "MMPC60219438OR" "MMPC67100379OR"
+"MMPC80521134OR" "MMPC82991304OR" "MMPC89717189OR" "MMPC94657810OR" "MMPC98504055OR"
+
+# interestingly, these samples are not the same in both taxa tables; those coinciding are:
+"MMPC89717189OR"
+"MMPC94657810OR"
+# what characteristics do these samples have?
+head(t.asv[,"MMPC89717189OR"])
+rowSums(t.asv[,"MMPC89717189OR"])
+rowSums(t.asv)
+
+aa<-as.data.frame(t.asv)
+aa<-aa[,"MMPC89717189OR"]
+sum(aa) #1979 reads given by 8 OTUs
+aa<-aa>100
+
+```
+
