@@ -1,0 +1,427 @@
+---
+title: "Check duplicates on beta-diversity measures"
+author: "Esther Molina"
+date: "16 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# On the beta-diversity calculations of all the samples we need to check whether the duplicates got a similar community composition to decide whether we can pool their reeads, and as a measure of seq quality:
+
+# set the environment and load the data:
+
+```{r}
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 795 samples
+
+
+#data.sample<-data.sample[data.sample$MMPCID %in% colnames(t.otu),] # FOR THE OPEN DATA; uncomment when OPEN data is used
+
+# beta-diversity measures
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/All samples duplicates and non-eleg/15112018_16s_betasdivASV.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/All samples duplicates and non-eleg/15112018_16s_betasdivOPEN.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/All samples duplicates and non-eleg/15112018_16s_betasdivASVrel.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/All samples duplicates and non-eleg/15112018_16s_betasdivOPENrel.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+# load the filtered otus tables and data 
+
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredASV.RData")
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredASV_rel.RData")
+
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredOPEN.RData")
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredOPEN_rel.RData")
+
+data.sample<-data.sample[data.sample$MMPCID %in% colnames(t.asv),] # FOR THE ASV DATA
+
+
+# OPEN data to be used when needed
+
+data.sample<-data.sample[data.sample$MMPCID %in% colnames(t.otu),] # FOR THE OPEN DATA
+
+
+```
+
+
+# we want to evaluate whether the taxonomic composition differs between the duplicate samples and all other samples
+# we have pairwise beta-diversities in a 605*605 matrix (in the case of ASV) for the 5 diversity measures
+# first we will prepare a list with all possible sample pairs
+# second we will select from this list all duplicates
+# third we will compare the duplicates with all other samples
+# Note: it would be not adequate to compare every duplicate with each other
+# since we have beta-diversities for all sample pairs, what makes sense is to compare the composition of the duplicates pairs with all other samples
+# Indeed, our aim is to evaluate whether the taxonomic composition of the duplicates differs regarding the composition of the other samples. This is what we test with the Wilcoxon test
+
+
+# some sample modifications to correct the data: To be run if data.sample needs to be corrected because we detected some data inconsistencies:
+
+```{r}
+
+##################################################################################################################
+# weird data for these samples:
+#[12,] "MMPC31367206OR" "MMPC76947975ST" #error! this is subject 3103129; it has one stool and one saliva sample??
+#[13,] "MMPC35131016ST" "MMPC52586872ST" CORRECT; any other saliva sample. DUPLICATE FOR STOOL
+#[16,] "MMPC65945502ST" "MMPC80934998ST" CORRECT; saliva samples were present!! DUPLICATE FOR STOOL
+# CORRECT DATA SAMPLE AND DATA SAMPLE CLEAN DATASETS!!
+
+# the following samples were metaG real duplicades in the first run: 
+MMPC24845793OR * not now!
+MMPC27025376OR * not now!
+MMPC31367206OR * OK
+MMPC52586872ST * OK
+MMPC65945502ST * OK
+# we should have only three MetaG samples duplicated but one sample which seems to be duplicated had a wrong genecore number: this sample must be MMPC31367206OR and MMPC76947975ST, saliva and stool, respectively. They have the same Genecore off because they were in the same pool. IRLT is mmpc52574889OR annd Genecore ID is 17s001390
+
+# check number of reads in both samples:
+dim(t.asv)
+sum(t.asv[,"MMPC31367206OR"])
+#[1] 16342
+sum(t.asv[,"MMPC76947975ST"])
+#[1] 4542
+
+# correct data.sample site for three samples: INCONSISTENT DATA! ALREADY DONE!
+table(data.sample$site)
+table(data.sample$duplicate)
+table(data.sample$duplicate, data.sample$site)
+
+#data.sample$site[data.sample$MMPCID=="MMPC76947975ST"]<-"stool" # clarified
+
+#data.sample$duplicate[data.sample$MMPCID=="MMPC52586872ST"]<-2
+#data.sample$duplicate[data.sample$MMPCID=="MMPC80934998ST"]<-2
+
+## then save the corrected data:
+## write.csv(data.sample, "D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).csv")
+## save(data.sample, file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData")
+
+```
+
+
+
+# prepare the data:
+
+```{r}
+
+names(beta.div.ASV)
+# "Bray_Curtis" "Bray_Curtis.sqrt" "Jaccard_w" "TINA_uw" "TINA_w"          
+
+# check dim for the first and second matrix:
+dim(beta.div.ASV[[1]])
+dim(beta.div.ASV[[2]])
+
+#dim(beta.div.OPEN[[1]]) # for OPEN
+#dim(beta.div.OPEN[[2]]) # for OPEN
+
+# now convert to distance matrix the matrix data file that we obtained:
+dist.betadiv<-lapply(beta.div.ASV, as.dist)
+#dist.betadiv<-lapply(beta.div.OPEN, as.dist) # for OPEN
+
+# here we have in a list the 5 beta-diversity indexes calculated 
+# save this as a R data: 
+
+#save(dist.betadiv, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/15112018_16sCalculatedBetasDistancesASV.Rdata")
+#save(dist.betadiv, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/15112018_16sCalculatedBetasDistancesOPEN.Rdata")
+
+
+# convert 16s beta-diversities into a list
+aa<-lapply(beta.div.ASV, rownames) #we had first to obtain a list of distances with beta-diversities from the 16s data; this is is for ASV data with raw counts; repeat afterwards for relative abundance data
+
+#aa<-lapply(beta.div.OPEN, rownames) #for OPEN data
+
+
+aa
+
+# take the OTU table with normalization values
+
+ot <- t.asv
+#ot <- t.otu # for OPEN data
+ot <- t(t(ot) / colSums(ot)) # with noramlization I get the total number of reads in evry sample decided by the total number of reads each sample had
+
+# check length of aa in ot
+
+length(which(aa[[1]] %in% colnames(ot)))
+#[1] 605 # this is as expected
+
+###########################################################################
+# make a list with all possible pairs of samples
+# with function combn we generate all combinations of n elements, taken m at a time:
+
+tmp = combn(aa[[1]], 2) # 2 is number of elements to choose; as we want pairs, this has to be 2
+# with "[a]," we indicate the column ids
+dim(tmp)
+#for ASV: [1]     2 182710 # there are 182710 sample pairs; that is: 605*605/2 (=183012.5 but we had some NAs)
+# for OPEN: [1]      2 187578
+tmp = t(combn(aa[[1]], 2)) # this is the same as above, but to reshape the data
+dim(tmp)
+#[1] 41328     2 ; for the ASV data
+#[1] 187578      2; for the OPEN data
+
+# so does the data look like: every sample combines with every other sample
+head(tmp)
+
+```
+
+# now we extract those samples that are duplicates
+
+```{r}
+
+names(data.sample)
+table(data.sample$duplicate) # there are 17 duplicates + 1 triplicate
+table(data.sample$oralstool_dup)
+
+## extract  those samples that are duplicates:
+dupl<-subset(data.sample, data.sample$duplicate==2 | data.sample$duplicate==3)
+head(dupl)
+dim(dupl)
+#[1] 18 50 # for AS
+#[1] 19 50 # for OPEN
+
+rownames(dupl)
+
+identical(rownames(data.sample), aa[[1]])
+#[1] FALSE
+length(which(rownames(data.sample) %in% aa[[1]]))
+#[1] 605; 613 for OPEN
+
+# now that we have all pairs, select the duplicates; remeber that tmp contains all possible pair combinations
+# since we have duplicates, we need to have them as well combined with each other; see dupl to identify them
+dist.dup = beta.div.ASV[[1]][data.sample[tmp[,1], "subject"] == data.sample[tmp[,2], "subject"]]
+length(dist.dup)
+#[1] 264 # but here are all possible duplicates, including subject IDs with oral and stool samples
+
+# select duplicates only with one type of samples: that is, site!=site
+
+dist.dup = tmp[data.sample[tmp[,1], "subject"] == data.sample[tmp[,2], "subject"] & data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"], ]
+length(dist.dup)
+# [1] 36; this is 18+18
+head(dist.dup)
+dim(dist.dup)
+# 18 2; the 18 duplicates for ASV
+# 19 2; the 19 duplicates for OPEN
+
+dist.dup
+# for ASV data:
+ #     [,1]             [,2]            
+ #[1,] "MMPC11358445OR" "MMPC82249728OR"
+ #[2,] "MMPC14552832OR" "MMPC16552996OR" *** new duplicate relative to previuos run
+ #[3,] "MMPC16580301OR" "MMPC69311263OR"
+ #[4,] "MMPC17738661OR" "MMPC35435394OR"
+ #[5,] "MMPC24612228OR" "MMPC94750294OR"
+ #[6,] "MMPC24845793OR" "MMPC47372291OR"
+ #[7,] "MMPC25017230OR" "MMPC81701140OR"
+ #[8,] "MMPC27025376OR" "MMPC62405084OR"
+ #[9,] "MMPC27615530OR" "MMPC90483555OR"
+#[10,] "MMPC29378093OR" "MMPC91150573OR"
+#[11,] "MMPC30177161OR" "MMPC54365530OR"
+#[12,] "MMPC35131016ST" "MMPC52586872ST" ***
+#[13,] "MMPC42978442OR" "MMPC63021713OR" ***
+#[14,] "MMPC55108520OR" "MMPC74456025OR"
+#[15,] "MMPC65945502ST" "MMPC80934998ST"
+#[16,] "MMPC67837511OR" "MMPC95655847OR"
+#[17,] "MMPC89090018OR" "MMPC96491005OR"
+#[18,] "MMPC91723386OR" "MMPC97862784OR"
+
+# for OPEN data:
+#      [,1]             [,2]            
+# [1,] "MMPC11358445OR" "MMPC82249728OR"
+# [2,] "MMPC14552832OR" "MMPC16552996OR"
+# [3,] "MMPC16580301OR" "MMPC69311263OR"
+# [4,] "MMPC17738661OR" "MMPC35435394OR"
+# [5,] "MMPC24612228OR" "MMPC94750294OR"
+# [6,] "MMPC24845793OR" "MMPC47372291OR"
+# [7,] "MMPC25017230OR" "MMPC81701140OR"
+# [8,] "MMPC27025376OR" "MMPC62405084OR"
+# [9,] "MMPC27615530OR" "MMPC90483555OR"
+#[10,] "MMPC29378093OR" "MMPC91150573OR"
+#[11,] "MMPC30177161OR" "MMPC54365530OR"
+#[12,] "MMPC35131016ST" "MMPC52586872ST"
+#[13,] "MMPC42978442OR" "MMPC63021713OR"
+#[14,] "MMPC55108520OR" "MMPC74456025OR"
+#[15,] "MMPC60860561OR" "MMPC63885194OR"
+#[16,] "MMPC65945502ST" "MMPC80934998ST"
+#[17,] "MMPC67837511OR" "MMPC95655847OR"
+#[18,] "MMPC89090018OR" "MMPC96491005OR"
+#[19,] "MMPC91723386OR" "MMPC97862784OR"
+
+idx.pairs.dup = which(data.sample[tmp[,1], "subject"] == data.sample[tmp[,2], "subject"] & data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"])
+idx.pairs.dup
+# for ASV:
+# [1]   4680  19415  26543  27981  47213  48969  50740  53684  56889  64305  69832  84936 106225 137979 156240 158588 179361
+#[18] 180982 
+
+# for OPEN:
+# [1]   4744  19679  26908  28367  47885  49669  51468  54456  58222  66236  71831  87133 108728
+#[14] 141643 152622 160415 162793 184229 185850
+
+dist.betadiv[[1]][idx.pairs.dup] # take the first column, which is Bray. The output are the 18 distances
+
+```
+
+# perform the wilcoxon test to test whether the duplicates are similar to the all the remaining samples:
+
+```{r}
+# perform Wilcoxon test as above:
+# 1) duplicates compared to all other samples of the same site
+
+idx.pairs.dup = data.sample[tmp[,1], "subject"] == data.sample[tmp[,2], "subject"] & data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"]
+
+wilcox.test(dist.betadiv[[1]][idx.pairs.dup], dist.betadiv[[1]][!idx.pairs.dup], alternative = "less")
+
+# for ASV
+#Wilcoxon rank sum test with continuity correction
+#W = 301780, p-value = 9.512e-10 
+#alternative hypothesis: true location shift is less than 0
+# for OPN:
+#W = 198930, p-value = 9.957e-12
+
+# if we consider the two doubtful samples as saliva samples: p-value=8.853e-09
+
+# 2) duplicates compared to all other samples if they were only salivas; 16 samples were duplicate
+idx.pairs.site = data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"]
+
+idx.pairs.dup = data.sample[tmp[,1], "subject"] == data.sample[tmp[,2], "subject"] & data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"] & data.sample[tmp[,1], "site"] == "oral cavity" & data.sample[tmp[,2], "site"] == "oral cavity"
+
+wilcox.test(dist.betadiv[[1]][idx.pairs.dup], dist.betadiv[[1]][!idx.pairs.dup & idx.pairs.site], alternative = "less")
+
+# for ASV
+#Wilcoxon rank sum test with continuity correction
+#W = 149550, p-value = 2.109e-09
+#alternative hypothesis: true location shift is less than 0
+# for OPN:
+# W = 30713, p-value = 1.994e-12
+# if we consider the two doubtful samples as saliva samples: p-value=4.941e-08
+
+# 2) duplicates compared to all other samples if they were only stool samples: two samples only were duplicates
+idx.pairs.site = data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"]
+
+idx.pairs.dup = data.sample[tmp[,1], "subject"] == data.sample[tmp[,2], "subject"] & data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"] & data.sample[tmp[,1], "site"] == "stool" & data.sample[tmp[,2], "site"] == "stool"
+
+wilcox.test(dist.betadiv[[1]][idx.pairs.dup], dist.betadiv[[1]][!idx.pairs.dup & idx.pairs.site], alternative = "less")
+
+# for ASV
+#Wilcoxon rank sum test with continuity correction
+#W = 118660, p-value = 0.4651
+#alternative hypothesis: true location shift is less than 0
+# for OPN:
+#W = 125770, p-value = 0.491
+
+```
+
+# these rsults show that we can pool saliva samples but maybe not stool samples. 
+
+# to summarize the overall analyses of duplicates comparisons with all other samples:
+
+
+```{r}
+
+######## 
+# Wilcoxon test for the comparison of duplicates with random samples:
+
+idx.pairs.dup = data.sample[tmp[,1], "subject"] == data.sample[tmp[,2], "subject"] & data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"]
+
+wilcox.test(dist.betadiv[[1]][idx.pairs.dup], dist.betadiv[[1]][!idx.pairs.dup], alternative = "less")
+
+# for ASV
+#Wilcoxon rank sum test with continuity correction
+#W = 301780, p-value = 9.512e-10
+#alternative hypothesis: true location shift is less than 0
+# for OPN:
+# W = 198930, p-value = 9.957e-12
+
+##
+idx.pairs.site = data.sample[tmp[,1], "site"] == data.sample[tmp[,2], "site"]
+
+wilcox.test(dist.betadiv[[1]][idx.pairs.dup], dist.betadiv[[1]][!idx.pairs.dup & idx.pairs.site], alternative = "less")
+
+# for ASV
+#Wilcoxon rank sum test with continuity correction
+#W = 268180, p-value = 1.284e-08
+#alternative hypothesis: true location shift is less than 0
+# for OPN:
+#W = 156450, p-value = 2.521e-11
+
+```
+
+#A significant p value will mean that variation within-samples/horses will be smaller that between-samples/horses, so both should be equivalent.
+
+# in my case: a significant p-value will mean that, in terms of composition, variation within-duplicates will be smaller than variation between the duplicates and all other samples, so both duplicates should be equivalent
+
+
+############ SUMMARY OF BROKEN TUBES: 
+#As discussed via telephone, we are aware that the following saliva sample tubes arrived damaged in Heidelberg, probably due to problems during transportation:
+
+3109301-broken stool sample
+3103319-broken lid from stool sample
+3103102-cracked oral
+3109203-cracked oral
+3109301-broken oral
+3109104-broken oral
+3109111-broken oral
+3109208-broken oral
+3109218-broken oral
+3109216-broken oral
+3109210-broken oral
+3109209-cracked oral
+3109222-broken oral
+
+# We will need to check which stool samples are the best ones:
+
+```{r}
+# the duplicated stool samples are:
+#[12,] "MMPC35131016ST" "MMPC52586872ST" # 3103226 
+#[16,] "MMPC65945502ST" "MMPC80934998ST" # 3103319; broken lid from stool sample
+
+sum(t.asv[,"MMPC35131016ST"])
+#[1] 26555
+sum(t.asv[,"MMPC52586872ST"])
+#[1] 7451
+
+sum(t.otu[,"MMPC35131016ST"])
+#[1] 30980
+sum(t.otu[,"MMPC52586872ST"])
+#[1] 13776
+
+sum(t.asv[,"MMPC65945502ST"])
+#[1] 11917
+sum(t.asv[,"MMPC80934998ST"])
+#[1] 8791
+
+sum(t.otu[,"MMPC65945502ST"])
+#[1] 16428
+sum(t.otu[,"MMPC80934998ST"])
+#[1] 11159
+
+# number of taxa:
+b=t.asv[,"MMPC35131016ST"]>0
+table(b) # 167 taxa
+b=t.asv[,"MMPC52586872ST"]>0
+table(b) # 90 taxa
+
+b=t.asv[,"MMPC65945502ST"]>0
+table(b) # 103 taxa
+b=t.asv[,"MMPC80934998ST"]>0
+table(b) # 80 taxa
+
+# OPEN:
+b=t.otu[,"MMPC35131016ST"]>0
+table(b) # 80 taxa
+b=t.otu[,"MMPC52586872ST"]>0
+table(b) # 112 taxa
+
+b=t.otu[,"MMPC65945502ST"]>0
+table(b) # 111 taxa
+b=t.otu[,"MMPC80934998ST"]>0
+table(b) # 95 taxa
+
+```
+

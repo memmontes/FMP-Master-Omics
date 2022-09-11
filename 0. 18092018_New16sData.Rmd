@@ -1,0 +1,690 @@
+---
+title: "New 16s analyses - DATA PREPROCESSING"
+author: "Esther Molina"
+date: "18 de septiembre de 2018"
+output: html_document
+---
+
+```{r setup, include=TRUE}
+#knitr::opts_chunk$set(echo = TRUE)
+```
+
+## PREPARE THE METADATA FILE:
+
+```{r load the data}
+
+setwd("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update")
+
+otu.data.ASV <- read.table("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.asv_data.gz", sep="\t", header=T)
+
+otu.table.ASV <- read.table("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.asv_table.filtered.tsv.gz")
+
+
+otu.data.OPEN <- read.table("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/all_samples.open_ref.otu_data.tsv.gz", sep="\t", header=T)
+
+otu.table.OPEN <- read.table("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/all_samples.open_ref.otu_table.tsv.gz")
+
+#otu.table.OPEN<-read.table(file = 'D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.open_ref.otu_table.csv', sep = '\t', header = TRUE)
+#otu.data.OPEN<-read.table(file = 'D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.open_ref.otu_data.csv', sep = '\t', header = TRUE) # everything is in ASV format
+#otu.table.ASV2<-read.table(file = 'fixed_asv_table_filt.tsv', sep = '\t', header = TRUE)
+
+#setwd("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update")
+#tmp.asv <- read.table("MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.asv_table.filtered.tsv.gz")
+#dim(tmp.asv)
+
+
+#setwd("D:/EMBL_STAY/DATA/AllSequenced16sData")
+
+#otu.dataNew<-read.table(file = 'MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.open_ref.otu_data - copia.csv', sep = '\t', header = TRUE)
+
+
+#otu.dataNew2<-read.table(file = "MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.open_ref.otu_table - copia.csv", sep = '\t', header = TRUE)
+
+#REFERENCE OTU DATA HAS 2081 OTUs. 
+## ASV data has more than 20,000 OTUs
+
+# load the old data:
+
+setwd("D:/EMBL_STAY/16SLabResults")
+
+otu.data.old<-read.table(file = 'all_samples.open_ref.otu_data.tsv', sep = '\t', header = TRUE)
+otu.table.old<-read.table(file = 'all_samples.open_ref.otu_table.tsv', sep = '\t', header = TRUE)
+
+```
+
+## Prepare the metadata
+
+```{r preparation of the metadata file for the 780 samples}
+
+
+## there is a mismatch of 1 sample between the OPEN and ASV format
+#otu.table.ASV<-as.data.frame(t(otu.table.ASV))
+#otu.table.OPEN<-as.data.frame(t(otu.table.OPEN))
+
+#not<-setdiff(rownames(otu.table.ASV), rownames(otu.table.OPEN))
+#"MMPC35162108OR" is lacking in the OPEN data
+
+setwd("D:/EMBL_STAY/DATA/CLOUD_data")
+prmeta16s.data<-read.csv("19092017_meta16sdata_complete.csv", header=T, sep=";", na.strings=c("NA", "8888", "888", "9999", "999")) 
+
+prmeta16s.data$RUN<-"First"
+
+# let´s check whether they are contained in the new data
+
+#aa<-as.data.frame(t(otu.table.ASV))
+
+# rownames already there
+#rownames(aa)
+
+## check how many of the first run are contained in the new otu.table: all should be there!!
+
+#rownames(prmeta16s.data)<-prmeta16s.data$corrected.16s.genecode
+
+#First.run<-as.data.frame(match(rownames(aa), rownames(prmeta16s.data)))
+  
+ # merge(prmeta16s.data, aa, by="rownames") # only 377 match here; 4 samples are lost!!
+  
+#First.run<-merge(prmeta16s.data, aa, by="row.names", all.x=TRUE)
+#First.run.true<-merge(prmeta16s.data, aa, by="row.names")
+
+# there are 7 samples that were not resequenced:
+
+#First.run<-First.run[,c(1:62)]
+#First.run.true<-First.run.true[,c(1:62)]
+
+#table(First.run$final_eligibility)
+
+#notReseq<-subset(First.run.true, !(Row.names %in% First.run$Row.names)) # does not work!
+
+#notReseq<-setdiff(First.run$Row.names, First.run.true$Row.names)
+
+# These are the 7 samples that have been not resequenced:
+#notReseq
+#[1] "MMPC13427371OR" "MMPC19177783OR" "MMPC31791216OR" "MMPC43825222OR" "MMPC50782316OR"
+#[6] "MMPC52031211OR" "MMPC68368287OR"
+
+a<-subset(prmeta16s.data, prmeta16s.data$corrected.16s.genecode=="MMPC19177783OR")
+
+## check for duplicates in the ASV otutable:
+
+length(unique(otu.table.ASV$X)) # there are all 20,699 OTUs
+length(unique(otu.table.ASV$X)) == nrow(otu.table.ASV) # there are no duplicates
+
+rm(First.run)
+rm(First.run.true)
+```
+
+
+## Prepare the metadata for those samples. Just in case, keep the samples 
+
+```{r prepare the metadata: raw and imputed}
+
+# bring the metadata in:
+## imputed data:
+
+setwd("D:/EMBL_STAY/Imputation/ImputationOnAllData")
+metadata.imp<-read.csv(file="01062018_imputeddataNew.csv", header=TRUE, sep=";")
+
+## the raw data:
+
+setwd("D:/EMBL_STAY/Imputation/ImputationOnAllData")
+metadata.raw<-read.csv(file="01062018_RawdataNew.csv", header=TRUE, sep=";")
+metadata.raw$Xa-NULL
+
+## bring the Illumina sequencing numbers:
+First.run<-prmeta16s.data[,c("subject", "aliquot", "number", "X16s.genecode.ID", "metaG.genecode", "corrected.16s.genecode", "input_MetaG", "inputID_16S", "input_16S", "site", "RUN")]
+setwd("D:/EMBL_STAY/DATA/Reorganiztion16s")
+Second.run<-read.csv(file="saliva_16S_seq_2ndbatch.csv", header=TRUE, sep=";")
+Third.run<-read.csv(file="19092018_16S_3rd_batch_metadata.csv", header=TRUE, sep=";")
+
+#Second.run$number<-NA
+Third.run$RUN<-"Third"
+Second.run<-Second.run[,c("subject", "ID", "aliquot", "site", "RUN")]
+First.run<-First.run[,c("subject", "corrected.16s.genecode", "aliquot", "site", "RUN")]
+colnames(First.run)<-c("subject", "ID", "aliquot", "site", "RUN")
+Third.run<-Third.run[,c("input_id", "id", "aliquot", "type", "RUN")]
+colnames(Third.run)<-c("subject", "ID", "aliquot", "site", "RUN")
+
+rownames(Third.run)<-Third.run$ID
+rownames(Second.run)<-Second.run$ID
+
+data.sample<-rbind(First.run, Second.run, Third.run)
+colnames(data.sample)<-c("subject", "MMPCID", "aliquot", "site", "RUN")
+
+########### ----------------------- ###########
+
+## Get the imputed data in!
+
+data.sample<-merge(data.sample, metadata.imp, by="subject", all.x="TRUE") ## two samples do not match
+
+two<-subset(data.sample, is.na(data.sample$sex)) # take the information of these two subjects from the previous analyses!!
+#3102306 ?? is this 3103206?? Cannnot be as there are two samples!!! Is this 3109206?? Cannnot be as there are two samples!!! It belongs to "MMPC85705244OR"
+#157501125
+
+# to get the data for this subject, let´s load the previous imputation data.
+setwd("D:/EMBL_STAY/Imputation/ImputationOnAllData")
+recu<-read.csv(file="25102017_Imputated.csv", header=TRUE, sep=",")
+a<-subset(recu, recu$subject=="157501125")
+data.sample[subject=="157501125"]
+
+data.sample$MetaG[data.sample$subject=="157501125"]<-0
+data.sample$center[data.sample$subject=="157501125"]<-13
+data.sample$casecontrol[data.sample$subject=="157501125"]<-1
+data.sample$sex[data.sample$subject=="157501125"]<-1
+data.sample$agec[data.sample$subject=="157501125"]<-56.84
+data.sample$smokingstatus[data.sample$subject=="157501125"]<-2
+data.sample$cpy1[data.sample$subject=="157501125"]<-28.94
+data.sample$alcohol_status[data.sample$subject=="157501125"]<-2
+data.sample$alc_dd[data.sample$subject=="157501125"]<-2.57
+data.sample$alldiab[data.sample$subject=="157501125"]<-0
+data.sample$diabcat[data.sample$subject=="157501125"]<-0
+data.sample$obese[data.sample$subject=="157501125"]<-0
+data.sample$panctype[data.sample$subject=="157501125"]<-0
+data.sample$asthma[data.sample$subject=="157501125"]<-0
+data.sample$nasal[data.sample$subject=="157501125"]<-1
+data.sample$allacid[data.sample$subject=="157501125"]<-0
+data.sample$allhburn[data.sample$subject=="157501125"]<-0
+data.sample$allrheum[data.sample$subject=="157501125"]<-0
+data.sample$allhbp[data.sample$subject=="157501125"]<-0
+data.sample$cholesterol[data.sample$subject=="157501125"]<-0
+data.sample$abmedication[data.sample$subject=="157501125"]<-0
+data.sample$antibiotic[data.sample$subject=="157501125"]<-NA
+data.sample$asparmed[data.sample$subject=="157501125"]<-0
+data.sample$salicylic.ever[data.sample$subject=="157501125"]<-0
+data.sample$paracetamol.ever[data.sample$subject=="157501125"]<-0
+data.sample$cholmedication[data.sample$subject=="157501125"]<-0
+data.sample$cortmed[data.sample$subject=="157501125"]<-0
+data.sample$nsaidmed[data.sample$subject=="157501125"]<-0
+data.sample$diabdiet[data.sample$subject=="157501125"]<-0
+data.sample$diabin[data.sample$subject=="157501125"]<-0
+data.sample$diabmed[data.sample$subject=="157501125"]<-0
+data.sample$metformin.ever[data.sample$subject=="157501125"]<-NA
+data.sample$probiot[data.sample$subject=="157501125"]<-NA
+data.sample$periodontitis[data.sample$subject=="157501125"]<-0
+data.sample$recession[data.sample$subject=="157501125"]<-0
+data.sample$FHPDAC[data.sample$subject=="157501125"]<-0
+data.sample$method[data.sample$subject=="157501125"]<-"Listerine 1"
+data.sample$cpy1t[data.sample$subject=="157501125"]<-2
+data.sample$alc_ddt[data.sample$subject=="157501125"]<-3
+
+## microbiome saliva returned for 131 samples, according to my records!
+
+# to get the data back, we can extract those two subjects from the previuos imputation set:
+
+
+
+## REVISE THE DISEASES STATUS TO MAKE SURE THAT EVERYTHING IS CORRECTLY CODED!!!
+# 3103113 must be now: 3103330; from PC to CP
+# 3103209 should be now CP without relabeling
+# 3109131 control that self-reported
+# 3109220 control eligibility
+
+a<-subset(data.sample, data.sample$subject==3103330) # OK
+a<-subset(data.sample, data.sample$subject==3103209) # OK
+a<-subset(data.sample, data.sample$subject==3109131) # DOES NOT EXIST; passed o pangen. OK
+a<-subset(data.sample, data.sample$subject==3109220) # OK
+rm(a)
+
+## some descriptives for the complete dataset are:
+
+library(compareGroups)
+
+data.sample$casecontrol<-as.factor(data.sample$casecontrol)
+data.sample$MetaG<-as.factor(data.sample$MetaG)
+
+res <- compareGroups(casecontrol ~ site+method+RUN, data=data.sample, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+#____________________________________________________________ 
+#                     0           1          2      p.overall 
+#                   N=305       N=436       N=54              
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+#site:                                               <0.001   
+#    oral cavity 258 (84.6%) 382 (87.6%) 30 (55.6%)           
+#    stool       47 (15.4%)  54 (12.4%)  24 (44.4%)           
+#method:                                             <0.001   
+#    Listerine 1  8 (2.62%)   4 (0.92%)  0 (0.00%)            
+#    Listerine 2 144 (47.2%) 217 (49.8%) 0 (0.00%)            
+#    Listerine 3 46 (15.1%)  96 (22.0%)  0 (0.00%)            
+#    MetaG       107 (35.1%) 119 (27.3%) 54 (100%)            
+#RUN:                                                <0.001   
+#    First       164 (53.8%) 195 (44.7%) 25 (46.3%)           
+#   Second      128 (42.0%) 224 (51.4%) 8 (14.8%)            
+#    Third       13 (4.26%)  17 (3.90%)  21 (38.9%)           
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+
+
+res <- compareGroups(site ~ casecontrol+method+RUN, data=data.sample, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+#________________________________________________ 
+#                oral cavity   stool    p.overall 
+#                   N=670      N=125              
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+#casecontrol:                            <0.001   
+#    0           258 (38.5%) 47 (37.6%)           
+#    1           382 (57.0%) 54 (43.2%)           
+#    2           30 (4.48%)  24 (19.2%)           
+#method:                                 <0.001   
+#    Listerine 1 12 (1.79%)  0 (0.00%)            
+#    Listerine 2 361 (53.9%) 0 (0.00%)            
+#    Listerine 3 142 (21.2%) 0 (0.00%)            
+#    MetaG       155 (23.1%) 125 (100%)           
+#RUN:                                    <0.001   
+#    First       286 (42.7%) 98 (78.4%)           
+#    Second      360 (53.7%) 0 (0.00%)            
+#    Third       24 (3.58%)  27 (21.6%)           
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+
+##############################################################################
+# save the data!
+save.image("D:/EMBL_STAY/DATA/Reorganiztion16s/19092018_samplelist for new analyses on 16s seq.RData")
+
+# load the data
+load("D:/EMBL_STAY/DATA/Reorganiztion16s/19092018_samplelist for new analyses on 16s seq.RData")
+
+# there are 17 non eligible cases; add duplicates variables to the file.
+
+write.csv(data.sample, "D:/EMBL_STAY/DATA/AllSequenced16sData/19092018_16sDatacomplete.csv")
+
+data.sample<-read.csv(file="D:/EMBL_STAY/DATA/AllSequenced16sData/19092018_16sDatacomplete.csv", header=TRUE, sep=";")
+
+## subset to data.sample wihout non-eligible and duplicates
+data.sample.clean<-subset(data.sample, data.sample$final_eligibility=="ELIGIBLE")
+data.sample.clean<-subset(data.sample, data.sample$duplicate==1)
+## 769 samples remain!!
+
+##################
+##################
+## save all the datasets:
+write.csv(data.sample, "D:/EMBL_STAY/DATA/AllSequenced16sData/19092018_16sDatacomplete.csv")
+write.csv(data.sample.clean, "D:/EMBL_STAY/DATA/AllSequenced16sData/19092018_16sDataclean(N=769).csv")
+
+save(data.sample, file="D:/EMBL_STAY/DATA/AllSequenced16sData/19092018_16sDatacomplete.RData")
+save(data.sample.clean, file="D:/EMBL_STAY/DATA/AllSequenced16sData/19092018_16sDataclean(N=769).RData")
+
+
+##################
+##################
+# some descriptives for the cleaned dataset are:
+
+library(compareGroups)
+
+data.sample.clean2$casecontrol<-as.factor(data.sample.clean2$casecontrol)
+data.sample.clean$MetaG<-as.factor(data.sample.clean$MetaG)
+
+res <- compareGroups(casecontrol ~ site+method+RUN, data=data.sample.clean, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+#____________________________________________________________ 
+#                     0           1          2      p.overall 
+#                   N=302       N=413       N=54              
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+#site:                                               <0.001   
+#    oral cavity 255 (84.4%) 359 (86.9%) 30 (55.6%)           
+#    stool       47 (15.6%)  54 (13.1%)  24 (44.4%)           
+#method:                                             <0.001   
+#    Listerine 1  8 (2.65%)   4 (0.97%)  0 (0.00%)            
+#    Listerine 2 144 (47.7%) 216 (52.3%) 0 (0.00%)            
+#    Listerine 3 43 (14.2%)  74 (17.9%)  0 (0.00%)            
+#    MetaG       107 (35.4%) 119 (28.8%) 54 (100%)            
+#RUN:                                                <0.001   
+#    First       161 (53.3%) 172 (41.6%) 25 (46.3%)           
+#    Second      128 (42.4%) 224 (54.2%) 8 (14.8%)            
+#    Third       13 (4.30%)  17 (4.12%)  21 (38.9%)           
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+
+
+res <- compareGroups(site ~ casecontrol+method+RUN, data=data.sample.clean, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+#________________________________________________ 
+#                oral cavity   stool    p.overall 
+#                   N=644      N=125              
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+#casecontrol:                            <0.001   
+#    0           255 (39.6%) 47 (37.6%)           
+#    1           359 (55.7%) 54 (43.2%)           
+#    2           30 (4.66%)  24 (19.2%)           
+#method:                                 <0.001   
+#    Listerine 1 12 (1.86%)  0 (0.00%)            
+#    Listerine 2 360 (55.9%) 0 (0.00%)            
+#    Listerine 3 117 (18.2%) 0 (0.00%)            
+#    MetaG       155 (24.1%) 125 (100%)           
+#RUN:                                    <0.001   
+#    First       260 (40.4%) 98 (78.4%)           
+#    Second      360 (55.9%) 0 (0.00%)            
+#    Third       24 (3.73%)  27 (21.6%)           
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+
+## data sample more cleaned: without the 15 samples with non-available data:
+
+
+data.sample.clean2<-subset(data.sample.clean, data.sample.clean$MMPCID!="MMPC19177783OR" & data.sample.clean$MMPCID!="MMPC13427371OR" & data.sample.clean$MMPCID!="MMPC94081974OR" & data.sample.clean$MMPCID!="MMPC52031211OR" & data.sample.clean$MMPCID!="MMPC68669084OR" & data.sample.clean$MMPCID!="MMPC89399593OR" & data.sample.clean$MMPCID!="MMPC87531071OR" & data.sample.clean$MMPCID!="MMPC23375050OR" & data.sample.clean$MMPCID!="MMPC23375050OR" & data.sample.clean$MMPCID!="MMPC84079146OR" & data.sample.clean$MMPCID!="MMPC66167332OR" & data.sample.clean$MMPCID!="MMPC43825222OR" & data.sample.clean$MMPCID!="MMPC31791216OR" & data.sample.clean$MMPCID!="MMPC21703460OR" & data.sample.clean$MMPCID!="MMPC68368287OR" & data.sample.clean$MMPCID!="MMPC50782316OR" & data.sample.clean$MMPCID!="MMPC35162108OR")
+
+res <- compareGroups(casecontrol ~ site+method+RUN, data=data.sample.clean2, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+#____________________________________________________________ 
+#                     0           1          2      p.overall 
+#                   N=293       N=408       N=53              
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+#site:                                               <0.001   
+#    oral cavity 246 (84.0%) 354 (86.8%) 29 (54.7%)           
+#    stool       47 (16.0%)  54 (13.2%)  24 (45.3%)           
+#method:                                             <0.001   
+#    Listerine 1  7 (2.39%)   4 (0.98%)  0 (0.00%)            
+#    Listerine 2 141 (48.1%) 213 (52.2%) 0 (0.00%)            
+#    Listerine 3 41 (14.0%)  73 (17.9%)  0 (0.00%)            
+#    MetaG       104 (35.5%) 118 (28.9%) 53 (100%)            
+#RUN:                                                <0.001   
+#    First       157 (53.6%) 170 (41.7%) 24 (45.3%)           
+#    Second      123 (42.0%) 221 (54.2%) 8 (15.1%)            
+#    Third       13 (4.44%)  17 (4.17%)  21 (39.6%)           
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+
+res <- compareGroups(site ~ casecontrol+method+RUN, data=data.sample.clean2, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+#________________________________________________ 
+#                oral cavity   stool    p.overall 
+#                   N=629      N=125              
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+#casecontrol:                            <0.001   
+#    0           246 (39.1%) 47 (37.6%)           
+#    1           354 (56.3%) 54 (43.2%)           
+#    2           29 (4.61%)  24 (19.2%)           
+#method:                                 <0.001   
+#    Listerine 1 11 (1.75%)  0 (0.00%)            
+#    Listerine 2 354 (56.3%) 0 (0.00%)            
+#    Listerine 3 114 (18.1%) 0 (0.00%)            
+#    MetaG       150 (23.8%) 125 (100%)           
+#RUN:                                    <0.001   
+#    First       253 (40.2%) 98 (78.4%)           
+#    Second      352 (56.0%) 0 (0.00%)            
+#    Third       24 (3.82%)  27 (21.6%)           
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+
+```
+
+## now check how many are really contained in the sequencing results
+
+```{r check secuencing results}
+
+rownames(data.sample)<-data.sample$MMPCID
+rownames(data.sample)
+
+notReseq2<-setdiff(rownames(data.sample), colnames(otu.table.ASV))
+
+# these are the 15 samples that were not resequenced:
+# [1] "MMPC19177783OR" "MMPC13427371OR" "MMPC94081974OR" "MMPC52031211OR" "MMPC68669084OR"
+# [6] "MMPC89399593OR" "MMPC87531071OR" "MMPC23375050OR" "MMPC84079146OR" "MMPC66167332OR"
+# [11] "MMPC43825222OR" "MMPC31791216OR" "MMPC21703460OR" "MMPC68368287OR" "MMPC50782316OR"
+
+bb<-subset(data.sample, data.sample$MMPCID=="MMPC19177783OR" | data.sample$MMPCID=="MMPC13427371OR" | data.sample$MMPCID=="MMPC94081974OR" | data.sample$MMPCID=="MMPC52031211OR" | data.sample$MMPCID=="MMPC68669084OR" | data.sample$MMPCID=="MMPC89399593OR" | data.sample$MMPCID=="MMPC87531071OR" | data.sample$MMPCID=="MMPC23375050OR" | data.sample$MMPCID=="MMPC23375050OR" | data.sample$MMPCID=="MMPC84079146OR" | data.sample$MMPCID=="MMPC66167332OR" | data.sample$MMPCID=="MMPC43825222OR" | data.sample$MMPCID=="MMPC31791216OR" | data.sample$MMPCID=="MMPC21703460OR" | data.sample$MMPCID=="MMPC68368287OR" | data.sample$MMPCID=="MMPC50782316OR")
+           
+bb$subject
+#   3109209   3109222   3109228   3109319 157012024 157012121 157022115 157031132 157041021
+# 157041064 157091054 157091081 157092025 157092161 157502061
+
+## if we consider non-eligibility and duplicates issues:
+
+rownames(data.sample.clean)<-data.sample.clean$MMPCID
+rownames(data.sample.clean)
+
+notReseq3<-setdiff(rownames(data.sample.clean), colnames(otu.table.ASV))
+
+# There are 14 samples not sequenced. Only one was either a dupliucate or non-eligible sample. So elgibility or duplicates were not an issue:
+
+# [1] "MMPC19177783OR" "MMPC13427371OR" "MMPC94081974OR" "MMPC52031211OR" "MMPC68669084OR"
+# [6] "MMPC89399593OR" "MMPC87531071OR" "MMPC23375050OR" "MMPC84079146OR" "MMPC66167332OR"
+# [11] "MMPC31791216OR" "MMPC21703460OR" "MMPC68368287OR" "MMPC50782316OR"
+
+# Reminder: samples not resequenced from the first batch:
+
+#[1] "MMPC13427371OR" "MMPC19177783OR" "MMPC31791216OR" "MMPC43825222OR" "MMPC50782316OR"
+#[6] "MMPC52031211OR" "MMPC68368287OR"
+
+```
+
+
+# Upload the data for the next time: START ALWAYS FROM HERE!
+```{r}
+
+load("D:/EMBL_STAY/DATA/Reorganiztion16s/19092018_samplelist for new analyses on 16s seq.RData")
+
+# OR:
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/19092018_16sDatacomplete.RData")
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/19092018_16sDataclean(N=769).RData")
+
+
+
+```
+
+## load the OTU TABLE
+
+```{r load the OTU TABLE}
+
+# ASV allignment
+otu.data.ASV <- read.table("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.asv_data.gz", sep="\t", header=T)
+otu.table.ASV <- read.table("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/MMPC_re-run1_MMPC_run2_MMPC_run3_conf3.asv_table.filtered.tsv.gz")
+
+# OPEN allignment
+otu.data.OPEN <- read.table("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/all_samples.open_ref.otu_data.tsv.gz", sep="\t", header=T)
+otu.table.OPEN <- read.table("D:/EMBL_STAY/DATA/AllSequenced16sData/September2019_update/all_samples.open_ref.otu_table.tsv.gz")
+
+
+# SOME CONSIDERATIONS:
+# make sure we will have removed samples:
+"MMPC35162108OR"
+# 15 additional samples due to poor quality
+"MMPC13427371OR"
+"MMPC19177783OR"
+"MMPC31791216OR"
+"MMPC43825222OR"
+"MMPC50782316OR"
+"MMPC52031211OR"
+"MMPC68368287OR"
+"MMPC19177783OR" 
+"MMPC13427371OR" 
+"MMPC94081974OR" 
+"MMPC52031211OR" 
+"MMPC68669084OR"
+"MMPC89399593OR" 
+"MMPC87531071OR" 
+"MMPC23375050OR" 
+"MMPC84079146OR" 
+"MMPC66167332OR"
+"MMPC43825222OR" 
+"MMPC31791216OR" 
+"MMPC21703460OR" 
+"MMPC68368287OR" 
+"MMPC50782316OR"
+
+# One of the samples included in the second batch appears as aliquot=3102306100 ("MMPC85705244OR"). This must be 3103306100 (or subject ID: 3103306). I have considered it like this in my data. Please amend yours if so needed.
+
+#No, this would not be correct. The ASV table is a higher-resolution version of the OPEN table. In fact, each OTU in the OPEN table is a cluster of ASVs from the ASV table. One could say that the ASV table is "clustering at 100% identity", and the OPEN table is "clustering at 98% similarity". So they should be processed independently, as independent views on the same data. One question to ask is whether some features only emerge for ASVs; but bc there are more ASVs, more tests and corrections are needed.
+https://www.bioconductor.org/packages/release/bioc/vignettes/dada2/inst/doc/dada2-intro.html 
+http://qiime.org/tutorials/otu_picking.html
+
+# OTU table OPEN contains all valid samples
+
+```
+
+# proceed with cleaning to have all samples ready for analyses; for now, we will keep the duplicates and non-elegible cases. Only the 16 samples have to be removed to keep all the data consistent
+
+```{r prepare all final data}
+
+# remove the sample not contained in ASV but in OPEN
+otu.table.ASV$MMPC35162108OR<-NULL
+# now we keep 779 samples for the analyses in both for all OTU analyses
+
+# now, remove from the metadata 16 samples in total (1+15):
+rownames(data.sample)<-data.sample$MMPCID
+
+newdata<-data.sample[data.sample$MMPCID %in% colnames(otu.table.OPEN),]
+
+data.sample<-newdata
+
+##################
+##################
+## save all the datasets:
+write.csv(data.sample, "D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).csv")
+save(data.sample, file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData")
+
+save(otu.data.ASV, file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+save(otu.data.OPEN, file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+save(otu.table.ASV, file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otutableASV(N=779).RData")
+save(otu.table.OPEN, file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otutableOPEN(N=779).RData")
+
+# correct data.sample site for three samples: INCONSISTENT DATA!
+table(data.sample$site)
+table(data.sample$duplicate)
+table(data.sample$duplicate, data.sample$site)
+
+data.sample$site[data.sample$MMPCID=="MMPC76947975ST"]<-"stool"
+
+data.sample$duplicate[data.sample$MMPCID=="MMPC52586872ST"]<-2
+data.sample$duplicate[data.sample$MMPCID=="MMPC80934998ST"]<-2
+
+
+##################
+##################
+## files to open for the analyses:
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData")
+
+# otutables and data
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otutableASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otutableOPEN(N=779).RData")
+
+# some final descriptives:
+library(compareGroups)
+
+data.sample$duplicate<-as.factor(data.sample$duplicate)
+data.sample$center<-as.factor(data.sample$center)
+data.sample$sex<-as.factor(data.sample$sex)
+data.sample$casecontrol<-as.factor(data.sample$casecontrol)
+
+res <- compareGroups(casecontrol ~ site+method+RUN+final_eligibility+duplicate+center+sex+agec, data=data.sample, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+#________________________________________________________________ 
+#                        0           1           2      p.overall 
+#                      N=305       N=436       N=54               
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+#site:                                                   <0.001   
+#    oral cavity    258 (84.6%) 382 (87.6%) 30 (55.6%)            
+#    stool          47 (15.4%)  54 (12.4%)  24 (44.4%)            
+#method:                                                 <0.001   
+#    Listerine 1     8 (2.62%)   4 (0.92%)   0 (0.00%)            
+#    Listerine 2    144 (47.2%) 217 (49.8%)  0 (0.00%)            
+#    Listerine 3    46 (15.1%)  96 (22.0%)   0 (0.00%)            
+#    MetaG          107 (35.1%) 119 (27.3%)  54 (100%)            
+#RUN:                                                    <0.001   
+#    First          164 (53.8%) 195 (44.7%) 25 (46.3%)            
+#    Second         128 (42.0%) 224 (51.4%)  8 (14.8%)            
+#    Third          13 (4.26%)  17 (3.90%)  21 (38.9%)            
+#final_eligibility:                                      <0.001   
+#    ELIGIBLE       305 (100%)  419 (96.1%)  54 (100%)            
+#    NON ELIGIBLE    0 (0.00%)  17 (3.90%)   0 (0.00%)            
+#duplicate:                                               0.004   
+#    1              302 (99.0%) 413 (94.7%)  54 (100%)            
+#    2               3 (0.98%)  22 (5.05%)   0 (0.00%)            
+#    3               0 (0.00%)   1 (0.23%)   0 (0.00%)            
+#center:                                                 <0.001   
+#    0              72 (23.6%)  63 (14.4%)   0 (0.00%)            
+#    1              31 (10.2%)  45 (10.3%)   0 (0.00%)            
+#    2              81 (26.6%)  102 (23.4%) 44 (81.5%)            
+#    3               4 (1.31%)  57 (13.1%)   0 (0.00%)            
+#    8              109 (35.7%) 165 (37.8%) 10 (18.5%)            
+#    13              8 (2.62%)   4 (0.92%)   0 (0.00%)            
+#sex:                                                     0.017   
+#    0              149 (48.9%) 183 (42.0%) 16 (29.6%)            
+#    1              156 (51.1%) 253 (58.0%) 38 (70.4%)            
+#agec               68.9 (13.3) 67.9 (11.3) 64.8 (9.24)   0.068   
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+
+res <- compareGroups(site ~casecontrol+method+RUN+final_eligibility+duplicate+center+sex+agec, data=data.sample, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+#____________________________________________________ 
+#                   oral cavity    stool    p.overall 
+#                      N=670       N=125              
+#¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+#casecontrol:                                <0.001   
+#    0              258 (38.5%) 47 (37.6%)            
+#    1              382 (57.0%) 54 (43.2%)            
+#    2              30 (4.48%)  24 (19.2%)    
+#method:                                     <0.001   
+#    Listerine 1    12 (1.79%)   0 (0.00%)            
+#    Listerine 2    361 (53.9%)  0 (0.00%)            
+#    Listerine 3    142 (21.2%)  0 (0.00%)            
+#    MetaG          155 (23.1%) 125 (100%)            
+#RUN:                                        <0.001   
+#    First          286 (42.7%) 98 (78.4%)            
+#    Second         360 (53.7%)  0 (0.00%)            
+#    Third          24 (3.58%)  27 (21.6%)            
+#final_eligibility:                           0.325   
+#    ELIGIBLE       657 (98.1%) 121 (96.8%)           
+#    NON ELIGIBLE   13 (1.94%)   4 (3.20%)            
+#duplicate:                                   0.044   
+#    1              644 (96.1%) 125 (100%)            
+#    2              25 (3.73%)   0 (0.00%)            
+#    3               1 (0.15%)   0 (0.00%)            
+#center:                                     <0.001   
+#    0              135 (20.1%)  0 (0.00%)            
+#    1              76 (11.3%)   0 (0.00%)            
+#    2              159 (23.7%) 68 (54.4%)            
+#    3              61 (9.10%)   0 (0.00%)            
+#    8              227 (33.9%) 57 (45.6%)            
+#    13             12 (1.79%)   0 (0.00%)            
+#sex:                                         0.028   
+#    0              305 (45.5%) 43 (34.4%)            
+#    1              365 (54.5%) 82 (65.6%)            
+#agec               67.8 (12.1) 69.7 (11.4)   0.095   
+¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ 
+
+```
+
+## BE CAREFUL WITH METFORMIN EVER: it will be cero for non-diabetics in the pangen-saliva samples!
+
+## ##################
+# some additional descriptives for full dataset are:
+
+```{r}
+
+aa<-data.sample[,c(6,9,11:48)]
+aa<-as.data.frame(lapply(aa, as.factor))
+aa$agec<-data.sample$agec
+aa$cpy1<-data.sample$cpy1
+aa$alc_dd<-data.sample$alc_dd
+
+res <- compareGroups(casecontrol ~ ., data=aa, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+```
+

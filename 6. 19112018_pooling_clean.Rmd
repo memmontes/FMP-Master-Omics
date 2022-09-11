@@ -1,0 +1,396 @@
+---
+title: "Pooling of the duplicates"
+author: "Esther Molina"
+date: "19 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# after checking that we can pool the samples (because we will work afterwards with relative abundances), the steps are:
+# 1) from the metadata file and all our taxa and otu tables, we will need to sum up the reads
+# 2) then we will need to re-calculate alpha-diversity and beta-diversity indexes
+
+# set the libraries:
+
+```{r}
+library(dplyr)
+library(plyr)
+library(car)
+
+```
+
+
+# set the environment and load the data:
+
+```{r}
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 795 samples
+
+
+#data.sample<-data.sample[data.sample$MMPCID %in% colnames(t.otu),] # FOR THE OPEN DATA; uncomment when OPEN data is used
+
+# beta-diversity measures
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/All samples duplicates and non-eleg/15112018_16s_betasdivASV.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/All samples duplicates and non-eleg/15112018_16s_betasdivOPEN.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/All samples duplicates and non-eleg/15112018_16s_betasdivASVrel.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/All samples duplicates and non-eleg/15112018_16s_betasdivOPENrel.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+# load the filtered otus tables and data 
+
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredASV.RData")
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredASV_rel.RData")
+
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredOPEN.RData")
+load("D:/EMBL_STAY/DATA/AllSequenced16sData/06112018_filteredOPEN_rel.RData")
+
+data.sample<-data.sample[data.sample$MMPCID %in% colnames(t.asv),] # FOR THE ASV DATA
+
+
+# OPEN data to be used when needed
+
+#data.sample<-data.sample[data.sample$MMPCID %in% colnames(t.otu),] # FOR THE OPEN DATA; uncomment to use OPEN data or use code below
+
+
+```
+
+
+#################################################################
+# do the pooling by summing up the reads of duplicates
+# take ano.t and re-shape in order to sum rows
+# important is to have the dupl_saliva variable well defined to be select all pairs of duplicates
+
+```{r}
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 795 samples
+
+data.sample<-data.sample[data.sample$MMPCID %in% colnames(t.asv),] # FOR THE OPEN DATA
+
+ano<-t(t.asv)
+ano<-as.data.frame(ano)
+dim(ano) # samples in rows and taxa in columns
+# [1]  605 3393
+
+# now do the pooling summing up rows of duplicates across al OTUs; for this I will need to add to my OTU table the information on duplicates and site
+rownames(ano)
+
+aa<-data.sample[,c("subject", "MMPCID", "site", "duplicate")]
+
+ano<-merge(ano, aa,by="row.names")
+
+# integer is needed for the grouping: otherwise it will not work:
+ano$subject<-as.integer(ano$subject)
+ano$site<-as.integer(ano$site)
+ano$duplicate<-as.integer(ano$duplicate)
+#ano$MMPCID<-as.integer(ano$MMPCID)
+
+rownames(ano)<-ano$Row.names
+
+# in order to be able to select the duplicates, recode dup_saliva variable (since we are not going to pool stool samples)
+ano$duplicate<-recode(ano$duplicate, "1=1;2=2;3=2")
+ano$dupl_saliva<-1
+ano$dupl_saliva[ano$MMPCID=="MMPC11358445OR" | ano$MMPCID=="MMPC82249728OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC14552832OR" | ano$MMPCID=="MMPC16552996OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC16580301OR" | ano$MMPCID=="MMPC69311263OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC17738661OR" | ano$MMPCID=="MMPC35435394OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC24612228OR" | ano$MMPCID=="MMPC94750294OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC24845793OR" | ano$MMPCID=="MMPC47372291OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC25017230OR" | ano$MMPCID=="MMPC81701140OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC27025376OR" | ano$MMPCID=="MMPC62405084OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC27615530OR" | ano$MMPCID=="MMPC90483555OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC29378093OR" | ano$MMPCID=="MMPC91150573OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC30177161OR" | ano$MMPCID=="MMPC54365530OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC42978442OR" | ano$MMPCID=="MMPC63021713OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC55108520OR" | ano$MMPCID=="MMPC74456025OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC67837511OR" | ano$MMPCID=="MMPC95655847OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC89090018OR" | ano$MMPCID=="MMPC96491005OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC91723386OR" | ano$MMPCID=="MMPC97862784OR"]<-2
+
+#ano$dupl_saliva[ano$MMPCID=="MMPC35131016ST" | ano$MMPCID=="MMPC52586872ST"]<-2
+#ano$dupl_saliva[ano$MMPCID=="MMPC65945502ST" | ano$MMPCID=="MMPC80934998ST"]<-2
+
+# there are 18-2 stool duplicates; 16 saliva suplicates! If we pool all samples, we do it for the 18 samples, that is 36. Since it turned out that stool samples have not equivalent reads to all other stool samples, we decided to remove one of the duplicates:
+
+ano <- subset(ano, ano$MMPCID!= "MMPC52586872ST")
+ano <- subset(ano, ano$MMPCID!= "MMPC80934998ST")
+
+table(ano$duplicate)
+table(ano$dupl_saliva)
+
+ano$dupl_saliva<-as.factor(ano$dupl_saliva) 
+
+
+dupl.sum<-ddply(ano, c("subject", "site", "dupl_saliva"), numcolwise(sum)) # gives 587 samples
+
+dim(dupl.sum)
+
+#rownames(dupl.sum)<-rownames(ano)
+ano$Row.names<-NULL
+
+# check that all reads were correctly summed up
+
+ano<-ano[order(ano$subject),] # the original data
+
+head(ano[c("MMPC11358445OR", "MMPC82249728OR"),150:200]) # 157091055
+
+head(ano[ano$subject=="157091055",150:200])
+
+#head(dupl.sum[c("MMPC11358445OR", "MMPC82249728OR"),150:200])
+
+head(dupl.sum[dupl.sum$subject=="157091055",150:205])
+
+# 18 samples were removed; 587 samples remain; this is done authomatically 
+
+# check the two stool samples:
+
+head(ano[c("MMPC35131016ST", "MMPC52586872ST"),3390:3398]) # 3103226
+head(ano[c("MMPC65945502ST", "MMPC80934998ST"),3390:3398]) # 3103319
+
+head(dupl.sum[dupl.sum$subject=="3103226",1:50]) # stool sample
+head(dupl.sum[dupl.sum$subject=="3103319",1:50]) # oral and stool sample
+
+# save the two:
+write.csv(dupl.sum, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_checkDuplicateSumsASV.csv")
+write.csv(ano, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_OriginaWOSumsASV.csv")
+
+# add the row.names variable
+Row<-ano[,c("subject", "MMPCID", "site")]
+head(Row)
+head(dupl.sum[550:560,1:10]) # saliva is site==1
+dupl.sumRow<-merge(Row, dupl.sum,by=c("subject", "site"), all.y=TRUE)
+
+head(dupl.sumRow[550:560,1:10]) # saliva is site==1
+head(dupl.sumRow[,1:10]) # saliva is site==1
+rownames(dupl.sumRow)<-dupl.sumRow$MMPCID
+
+
+dupl.sumRow <- dupl.sumRow[ !(rownames(dupl.sumRow) %in% c("MMPC82249728OR",
+"MMPC16552996OR",
+"MMPC69311263OR",
+"MMPC35435394OR",
+"MMPC94750294OR",
+"MMPC47372291OR",
+"MMPC81701140OR",
+"MMPC62405084OR",
+"MMPC90483555OR",
+"MMPC91150573OR",
+"MMPC54365530OR",
+"MMPC63021713OR",
+"MMPC74456025OR",
+"MMPC95655847OR",
+"MMPC96491005OR",
+"MMPC97862784OR")), ]
+
+dupl.sumRow$subject<-NULL
+dupl.sumRow$site<-NULL
+dupl.sumRow$MMPCID<-NULL
+head(dupl.sumRow[,3390:3395]) 
+dupl.sumRow$dupl_saliva<-NULL
+dupl.sumRow$duplicate<-NULL
+
+# save:
+
+write.csv(dupl.sumRow, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_ASVfinaldataframe_pooled.csv")
+
+save(dupl.sumRow, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_ASVfinaldataframe_pooled.Rdata")
+
+# covert to matrix format
+class(t.asv)
+
+t.asv.pooled<-as.matrix(dupl.sumRow)
+class(t.asv.pooled)
+
+save(t.asv.pooled, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_ASVfinalMatrix_pooled.Rdata")
+
+
+```
+
+
+# do the same for the OPEN data:
+
+
+```{r}
+
+# start from the beginning:
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 795 samples
+
+data.sample<-data.sample[data.sample$MMPCID %in% colnames(t.otu),] # FOR THE OPEN DATA
+
+ano<-t(t.otu)
+ano<-as.data.frame(ano)
+dim(ano) # samples in rows and taxa in columns
+# [1]  613 852
+
+# now do the pooling summing up rows of duplicates across al OTUs; for this I will need to add to my OTU table the information on duplicates and site
+rownames(ano)
+
+aa<-data.sample[,c("subject", "MMPCID", "site", "duplicate")]
+
+ano<-merge(ano, aa,by="row.names")
+
+# integer is needed for the grouping: otherwise it will not work:
+ano$subject<-as.integer(ano$subject)
+ano$site<-as.integer(ano$site)
+ano$duplicate<-as.integer(ano$duplicate)
+#ano$MMPCID<-as.integer(ano$MMPCID)
+
+rownames(ano)<-ano$Row.names
+
+# in order to be able to select the duplicates, recode dup_saliva variable (since we are not going to pool stool samples)
+ano$duplicate<-recode(ano$duplicate, "1=1;2=2;3=2")
+ano$dupl_saliva<-1
+ano$dupl_saliva[ano$MMPCID=="MMPC11358445OR" | ano$MMPCID=="MMPC82249728OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC14552832OR" | ano$MMPCID=="MMPC16552996OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC16580301OR" | ano$MMPCID=="MMPC69311263OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC17738661OR" | ano$MMPCID=="MMPC35435394OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC24612228OR" | ano$MMPCID=="MMPC94750294OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC24845793OR" | ano$MMPCID=="MMPC47372291OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC25017230OR" | ano$MMPCID=="MMPC81701140OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC27025376OR" | ano$MMPCID=="MMPC62405084OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC27615530OR" | ano$MMPCID=="MMPC90483555OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC29378093OR" | ano$MMPCID=="MMPC91150573OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC30177161OR" | ano$MMPCID=="MMPC54365530OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC42978442OR" | ano$MMPCID=="MMPC63021713OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC55108520OR" | ano$MMPCID=="MMPC74456025OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC67837511OR" | ano$MMPCID=="MMPC95655847OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC89090018OR" | ano$MMPCID=="MMPC96491005OR"]<-2
+ano$dupl_saliva[ano$MMPCID=="MMPC91723386OR" | ano$MMPCID=="MMPC97862784OR"]<-2
+# and one additional duplicate:
+ano$dupl_saliva[ano$MMPCID=="MMPC60860561OR" | ano$MMPCID=="MMPC63885194OR"]<-2
+
+#ano$dupl_saliva[ano$MMPCID=="MMPC35131016ST" | ano$MMPCID=="MMPC52586872ST"]<-2
+#ano$dupl_saliva[ano$MMPCID=="MMPC65945502ST" | ano$MMPCID=="MMPC80934998ST"]<-2
+
+# there are 19-2 stool duplicates; 17 saliva suplicates! If we pool all samples, we do it for the 19 samples, that is 38. Since it turned out that stool samples have not equivalent reads to all other stool samples, we decided to remove one of the duplicates:
+
+ano <- subset(ano, ano$MMPCID!= "MMPC52586872ST")
+ano <- subset(ano, ano$MMPCID!= "MMPC80934998ST")
+
+# then we will pool 17 salivas; 34=dupl_saliva
+
+table(ano$duplicate)
+table(ano$dupl_saliva)
+
+ano$dupl_saliva<-as.factor(ano$dupl_saliva) 
+
+
+dupl.sum<-ddply(ano, c("subject", "site", "dupl_saliva"), numcolwise(sum)) # gives 594 samples
+
+dim(dupl.sum)
+
+#rownames(dupl.sum)<-rownames(ano)
+ano$Row.names<-NULL
+
+# check that all reads were correctly summed up
+
+ano<-ano[order(ano$subject),] # the original data
+
+head(ano[c("MMPC11358445OR", "MMPC82249728OR"),150:200]) # 157091055
+
+head(ano[ano$subject=="157091055",150:200])
+
+#head(dupl.sum[c("MMPC11358445OR", "MMPC82249728OR"),150:200])
+
+head(dupl.sum[dupl.sum$subject=="157091055",150:205])
+
+# 18 samples were removed; 587 samples remain; this is done authomatically 
+
+# check the two stool samples:
+
+#head(ano[c("MMPC35131016ST", "MMPC52586872ST"),3390:3398]) # 3103226
+#head(ano[c("MMPC65945502ST", "MMPC80934998ST"),3390:3398]) # 3103319
+
+head(dupl.sum[dupl.sum$subject=="3103226",1:50]) # stool sample
+head(dupl.sum[dupl.sum$subject=="3103319",1:50]) # oral and stool sample
+
+head(ano[ano$subject=="3103226",1:50]) # stool sample
+head(ano[ano$subject=="3103319",1:50]) # oral and stool sample
+
+# save the two:
+write.csv(dupl.sum, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_checkDuplicateSumsOPEN.csv")
+write.csv(ano, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_OriginaWOSumsOPEN.csv")
+
+# add the row.names variable
+Row<-ano[,c("subject", "MMPCID", "site")]
+head(Row)
+head(dupl.sum[550:560,1:10]) # saliva is site==1
+dupl.sumRow<-merge(Row, dupl.sum,by=c("subject", "site"), all.y=TRUE)
+
+
+head(dupl.sumRow[550:560,1:10]) # saliva is site==1
+head(dupl.sumRow[,1:10]) # saliva is site==1
+rownames(dupl.sumRow)<-dupl.sumRow$MMPCID
+
+dupl.sumRow <- dupl.sumRow[ !(rownames(dupl.sumRow) %in% c("MMPC82249728OR", "MMPC16552996OR",
+"MMPC69311263OR",
+"MMPC35435394OR",
+"MMPC94750294OR",
+"MMPC47372291OR",
+"MMPC81701140OR",
+"MMPC62405084OR",
+"MMPC90483555OR",
+"MMPC91150573OR",
+"MMPC54365530OR",
+"MMPC63021713OR",
+"MMPC74456025OR",
+"MMPC95655847OR",
+"MMPC96491005OR",
+"MMPC97862784OR",
+"MMPC63885194OR")), ]
+
+dupl.sumRow$subject<-NULL
+dupl.sumRow$site<-NULL
+dupl.sumRow$MMPCID<-NULL
+head(dupl.sumRow[,850:854]) 
+dupl.sumRow$dupl_saliva<-NULL
+dupl.sumRow$duplicate<-NULL
+
+# save:
+
+write.csv(dupl.sumRow, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_OPENfinaldataframe_pooled.csv")
+
+save(dupl.sumRow, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_OPENfinaldataframe_pooled.Rdata")
+
+# covert to matrix format
+class(t.otu)
+
+t.otu.pooled<-as.matrix(dupl.sumRow)
+class(t.otu.pooled)
+
+save(t.otu.pooled, file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_OPENfinalMatrix_pooled.Rdata")
+
+```
+
+
+# there is still the triplicate sample that we need to remove? No, it was pooled as well. It appears as duplicate because it was the sample kept in the data after pooling
+MMPC29378093OR # sample 
+157091048 # subject
+
+
+# doubting about one sample: see email to Ece 11/17/2018
+#This is what I had in my old data but I am finding other files were I have the site status modified as one saliva and one stool sample. I can not find an answer in my notes. I am doubting now whether I have one stool and one saliva sample (it should be like this.), or whether I am having a duplicate for the saliva sample and a wrong code. In the 384-batch file I can only find this sample as saliva.
+ 
+#Could you please help me to clarify this sample?
+ 
+#subject	aliquot	number	X16s.genecode.ID	metaG.genecode	corrected.16s.genecode	input_MetaG	inputID_16S	input_16S	site
+#103129	NA	195	MMPC31367206OR	MMPC52574889OR	MMPC31367206OR	17s001390-1-1	NA	17s001390	oral cavity
+#3103129	NA	195	MMPC76947975ST	MMPC52574889OR	MMPC76947975ST	17s001390-1-1	NA	17s001390	oral cavity
+
+#Hi Esther sorry for late reply I was in the lab. I checked and according to our database irlt is mmpc52574889OR and Genecore id is 17s001390 and it is a metag sample. You should count only MMPC31367206OR-17s004792 and MMPC76947975ST-17s004792. They have same Genecore off because they were in same pool. 
+
+#thank you, Ece. this means that one is saliva and the other stool. 
+
+# so I concluded that this was not a duplicate!
