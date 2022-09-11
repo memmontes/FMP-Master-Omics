@@ -1,0 +1,520 @@
+---
+title: "Edge R"
+author: "Esther Molina"
+date: "4 de diciembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## set the environment
+# load the libraries
+```{r load the libraries}
+
+library(edgeR, quietly=T)
+library(car)
+library(stats)
+library(graphics)
+library(grDevices)
+library(utils)
+library(datasets)
+library(methods)
+library(base)
+library(Biobase)
+library(ggplot2)
+library(RColorBrewer)
+library(mixOmics)
+library(gplots)
+#library("ALL")
+library("RColorBrewer")
+library("reshape2")
+library("ggplot2")
+```
+
+# load the data
+## START WITH ASV DATA:
+```{r}
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+
+# beta-diversity measures
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_Eligible.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_Eligible.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+# put all these files together to take the Rdata to Linux server:
+
+#save(beta.div.ASV, beta.div.OPEN, div.data.asv, div.data.otu, t.asv.data, t.asv.pooled, t.otu.data, t.otu.pooled, file="R:/Genetic_and_Molecular_Epidemiology/Homes/memolina/PERMANOVA/02122018_AllfilesPermanova.RData" )
+# to open in Linux:
+
+#load(file="/home/memolina/PERMANOVA/02122018_AllfilesPermanova.RData" )
+
+# also bring the otu tables here:
+# load the otudata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+
+
+```
+
+# put the otu data in the same format:
+
+```{r}
+
+# put everything in the same format: for ASV data
+
+t.asv<-as.data.frame(t(t.asv.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.ASV[otu.data.ASV$ASV_name %in% rownames(t.asv) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$ASV_name
+
+otdata<-otdata[rownames(t.asv),]
+
+# to check:
+identical(rownames(otdata), rownames(t.asv)) # TRUE
+
+# ot data is my otu taxonomy table!
+
+```
+
+
+# Prepare the data to use edgeR
+
+As we are going to control for some variables, we will need to transform some metadata variables beforehand (as done for the permanova results).
+
+
+```{r some transformed variables}
+
+##########################################
+# generate the method, metformin and smoking status:
+
+# add first the disease status variable:
+div.data.asv$Disease.status <- recode(div.data.asv$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+data.sample <- div.data.asv
+
+# for the OPEN data, uncomment the following:
+
+#div.data.otu$Disease.status <- recode(div.data.otu$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+#data.sample <- div.data.otu
+
+# also add the new method variable to distinguish between both methos in the microbiome study:
+data.sample$method.y[data.sample$method=="MetaG" & data.sample$center==8]<-"MetaG2"
+data.sample$method.y[is.na(data.sample$method.y)]<-"MetaG1"
+data.sample$method.y[data.sample$method=="Listerine 1"]<-"Listerine 1"
+data.sample$method.y[data.sample$method=="Listerine 2"]<-"Listerine 2"
+data.sample$method.y[data.sample$method=="Listerine 3"]<-"Listerine 3"
+table(data.sample$method.y)
+
+# change smoking status:
+table(data.sample$smokingstatus)
+#data.sample$smokingstatus<-as.factor(data.sample$smokingstatus)
+data.sample$smokingstatus.y<-recode(data.sample$smokingstatus, "0=0; 2=1; 3=2; 1=2")
+table(data.sample$smokingstatus.y)
+
+# reclassify metformin ever: variable called metformin ever.yy
+table(data.sample$metformin.ever)
+data.sample$metformin.ever.y<-ifelse(data.sample$alldiab==0, 0, NA)
+data.sample$metformin.ever.y<-ifelse(is.na(data.sample$metformin.ever.y) & data.sample$metformin.ever==1, 1, data.sample$metformin.ever.y)
+data.sample$metformin.ever.y<-ifelse(is.na(data.sample$metformin.ever.y), 2, data.sample$metformin.ever.y)
+data.sample$metformin.ever.y<-ifelse(is.na(data.sample$metformin.ever), NA, data.sample$metformin.ever.y)
+data.sample$metformin.ever.y<-factor(data.sample$metformin.ever.y, levels=c("0","1","2"), labels=c("no diabetes", "metformin use", "no metformin use"))
+table(data.sample$metformin.ever.y)
+table(data.sample$alldiab) # to double check
+
+# put rownames as sample.names in div.dataEleg.Imp
+rownames(data.sample)<-data.sample$sample.name
+
+```
+
+
+We want to keep only those taxa (OTUs) with prevalence > 2.5% in all samples (before we had 10%). This is also important to consider in order to not negatively influence multiple test correction, and to avoid the presence of false postives.
+This is however too strict as we kept only 1,015 OTUs and less than 1000 by site. We will consider all OTUs for the analyses.
+
+```{r filter out samples with prevalence higher than 5%}
+
+a.no<-t.asv.pooled# otu_table comes from code below for the Eligible cases:
+#a.no <- mapply(a.no, FUN=as.numeric)
+#a.no <-matrix(data=a.no, ncol=6490, nrow=258)
+#a.no<-as.data.frame(a.no)
+#colnames(a.no)<-rownames(otu_table)
+a.no = a.no[, colSums(a.no) >= 4 & colSums(a.no > 0) >= (0.025 * nrow(a.no))] 
+a.no<-as.data.frame(a.no) # I keep 1,015 OTUs after filtering for the top 2.5% prevalent OTUs
+#rownames(a.no)<-colnames(otu_table)
+
+# to do it by filtering in the first tep by site:
+
+data.sample_OR<-subset(data.sample, data.sample$site=="oral cavity")
+data.sample_ST<-subset(data.sample, data.sample$site=="stool")
+
+a.no.saliva<-a.no[rownames(data.sample_OR),] # extract ano.saliva otu_table
+a.no.saliva = a.no.saliva[, colSums(a.no.saliva) >= 4 & colSums(a.no.saliva > 0) >= (0.025 * nrow(a.no.saliva))] 
+dim(a.no.saliva)
+# there are 1047 taxa
+a.no.saliva = a.no.saliva[,colSums(a.no.saliva) > 0] # the same number of taxa remain
+
+a.no.stool<-a.no[rownames(data.sample_ST),]
+a.no.stool = a.no.stool[, colSums(a.no.stool) >= 4 & colSums(a.no.stool > 0) >= (0.025 * nrow(a.no.stool))]
+dim(a.no.stool)
+# there are 951 taxa
+a.no.stool = a.no.stool[,colSums(a.no.stool) > 0] # the same number of taxa remain
+
+```
+
+
+
+We go for the 1,015 OTU filtering and now keep OUTs by site (for multiple testing issues):
+
+```{r stratify OTUs by site}
+
+# to be deleted!!
+
+#data.sample_OR<-subset(data.sample, data.sample$site=="oral cavity")
+#data.sample_ST<-subset(data.sample, data.sample$site=="stool")
+
+#a.no.saliva<-a.no[rownames(data.sample_OR),] # extract ano.saliva otu_table
+
+# remove OTUs with 0 reads in total:
+#a.no.saliva = a.no.saliva[,colSums(a.no.saliva) > 0] # here I keep 872 OTUs in saliva with the 2.5% filter; if we go for all I keep 2604 in saliva
+
+#a.no.stool<-a.no[rownames(data.sample_ST),] # extract ano.saliva otu_table
+# remove OTUs with 0 reads in total:
+#a.no.stool = a.no.stool[,colSums(a.no.stool) > 0] # here I keep 473 OTUs in stool with the 2.5% filter; if we go for all I keep 1355 OTUs in stool
+
+```
+
+
+
+# We also need to adapt this to the edgeR format:
+
+# This is for saliva: RUN when saliva samples are to be used in the analyses
+
+```{r subset to saliva sample}
+
+##########################################
+# subset to saliva samples:
+
+#Pre-select sample metadata
+exp.data <- droplevels(data.sample_OR) # to drop unused levels
+#Pre-select count table
+#exp.ot <- otu_table
+exp.ot<-a.no.saliva #  now I have OTUs in columns and samples in rows
+#exp.aa<-as.data.frame(exp.ot)
+exp.ot<-as.matrix(exp.ot)
+# take it as a numerical matrix:
+#exp.ot <- mapply(exp.ot, FUN=as.numeric)
+#exp.ot  <-matrix(data=exp.ot, ncol=872, nrow=455)
+str(exp.ot)
+class(exp.ot)
+dim(exp.ot)
+
+#rownames(exp.ot)<-rownames(a.no.saliva)
+#colnames(exp.ot)<-colnames(a.no.saliva)
+
+dim(exp.ot)
+dim(exp.data)
+
+exp.ot<-t(exp.ot) # reshape to have rownames as OTUs
+dim(exp.ot)
+
+#Pre-select OTU data 
+exp.otu_data <- otdata[rownames(exp.ot), ]
+dim(exp.otu_data) # this is my adapted taxonomy table with 872 ASVs for saliva
+
+```
+
+# This is for stool: RUN when stool samples are to be used in the analyses
+
+```{r subset to sool samples}
+
+#Pre-select sample metadata
+exp.data <- droplevels(data.sample_ST) # to drop unused levels
+#Pre-select count table
+#exp.ot <- otu_table
+exp.ot<-a.no.stool #  now I have OTUs in columns and samples in rows
+#exp.aa<-as.data.frame(exp.ot)
+exp.ot<-as.matrix(exp.ot)
+# take it as a numerical matrix:
+#exp.ot <- mapply(exp.ot, FUN=as.numeric)
+#exp.ot  <-matrix(data=exp.ot, ncol=3758, nrow=91)
+str(exp.ot)
+
+#rownames(exp.ot)<-rownames(a.no.stool)
+#colnames(exp.ot)<-colnames(a.no.stool)
+
+dim(exp.ot)
+dim(exp.data)
+
+exp.ot<-t(exp.ot) # reshape to have rownames as OTUs
+dim(exp.ot)
+
+#Pre-select OTU data 
+exp.otu_data <- otdata[rownames(exp.ot), ]
+
+## do one after the other. Note, that names of variables are not adapted to saliva or stool
+```
+
+# DATA PREPARATION FOR OPEN DATA: RUN IT FOR THE OPEN DATA ONLY
+
+```{r}
+
+##################################################################
+# the same for OPEN DATA (uncomment when OPEN data is to be used):
+# put everything in the same format: for ASV data
+
+t.otu<-as.data.frame(t(t.otu.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.OPEN[otu.data.OPEN$OTU_name %in% rownames(t.otu) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$OTU_name
+
+otdata<-otdata[rownames(t.otu),]
+
+# to check:
+identical(rownames(otdata), rownames(t.otu)) # TRUE
+
+# ot data is my otu taxonomy table!
+
+a.no<-t.otu.pooled# otu_table comes from code below for the Eligible cases:
+#a.no <- mapply(a.no, FUN=as.numeric)
+#a.no <-matrix(data=a.no, ncol=6490, nrow=258)
+#a.no<-as.data.frame(a.no)
+#colnames(a.no)<-rownames(otu_table)
+a.no = a.no[, colSums(a.no) >= 4 & colSums(a.no > 0) >= (0.025 * nrow(a.no))] 
+a.no<-as.data.frame(a.no) # I keep 479 OTUs after filtering for the top 2.5% prevalent OTUs
+#rownames(a.no)<-colnames(otu_table)
+
+# additional filtering by site:
+data.sample_OR<-subset(data.sample, data.sample$site=="oral cavity")
+data.sample_ST<-subset(data.sample, data.sample$site=="stool")
+
+a.no.saliva<-a.no[rownames(data.sample_OR),] # extract ano.saliva otu_table
+# remove OTUs with 0 reads in total:
+a.no.saliva = a.no.saliva[,colSums(a.no.saliva) > 0] # here I keep 309 OTUs in saliva with the 2.5% filter; if we go for all I keep 453 in saliva
+
+a.no.stool<-a.no[rownames(data.sample_ST),] # extract ano.saliva otu_table
+# remove OTUs with 0 reads in total:
+a.no.stool = a.no.stool[,colSums(a.no.stool) > 0] # here I keep 355 OTUs in stool with the 2.5% filter; if we go for all I keep 615 OTUs in stool
+
+```
+
+#### EDGER ANALYSES: LINEAR REGRESSION ANALYSES:
+
+Set the parameters to run edgeR:
+
+```{r setting parameters - saliva analyses, adjusting for method, sex and age} 
+
+#Define current grouping factors
+#=> see edgeR documentation: https://www.bioconductor.org/packages/devel/bioc/vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf
+exp.data$method.y<-as.factor(exp.data$method.y)
+exp.data$sex<-as.factor(exp.data$sex)
+exp.data$casecontrol<-as.factor(exp.data$casecontrol)
+exp.data$group <- droplevels(interaction(exp.data$method.y, exp.data$sex, exp.data$agec)) ### this must be samples in rows
+# with this information we will calculate normalization factors
+
+# to avoid problems with normaliztion, we will need to have the data for the group variable as numeric:
+
+
+#Coerce OTU table into DGElist object; this is a specific edgeR object that we will need 
+
+# count matrix must be an integer
+
+dim(exp.ot)
+dim(exp.data)
+dim(exp.otu_data)
+length(exp.data$group)
+
+#y<-DGEList(counts=exp.ot, group=exp.data$group)
+
+dim(exp.otu_data)
+
+exp.dge <- DGEList(counts=exp.ot, group=droplevels(exp.data$casecontrol), genes=exp.otu_data, remove.zeros=T) # 
+
+exp.dge$samples
+
+#Get current overall experiment design (taking into account experiment as batch effect and all other confounders); here I will start with the crude model in global samples.
+#exp.design <- model.matrix( ~ casecontrol.y + metformin.ever.yy, data=exp.data) # for stools
+
+#exp.design <- model.matrix( ~ casecontrol.y + smokingstatus.y, data=exp.data)  # for saliva
+exp.design <- model.matrix( ~ casecontrol, data=exp.data)  # UNADJUSTED!!
+
+#exp.design <- model.matrix( ~ casecontrol.y + as.factor(antibiotic.y), data=exp.data)  # UNADJUSTED!!
+
+
+
+#Calculate normalization factors
+exp.dge <- calcNormFactors(exp.dge, method="TMM") #I removed the code by Sebastian: 
+#exp.dge <- calcNormFactors(exp.dge) 
+
+exp.dge$samples
+
+#Estimate dispersion (robustly)
+exp.dge <- estimateGLMRobustDisp(exp.dge, design=exp.design)
+
+```
+
+Run the models:
+```{r run glm models in edgeR}
+
+# check the reference group:
+head(exp.design)
+
+#Fit generalized linear model (glm)
+exp.fit <- glmFit(exp.dge, design=exp.design)
+
+#Detect differentially abundant OTUs
+exp.lrt <- glmLRT(exp.fit, coef=2) # change to 3 if you want to compare pancreatitis vs controls
+
+#Extract results
+exp.tt <- topTags(exp.lrt, n=nrow(exp.dge), adjust.method="BH", sort.by="PValue")
+
+#Prepare table for export
+exp.tt_data <- data.frame(
+  exp.tt$table,
+  log10P = -log10(exp.tt$table$PValue),
+  significant = as.factor(exp.tt$table$FDR < 0.01),
+  local_OTU_size = rowSums(exp.ot)[rownames(exp.tt$table)],
+  local_sample_count = apply(exp.ot > 0, 1, function(x) {length(which(x))})[rownames(exp.tt$table)]
+)
+
+#Flip logFC (as test was WT-KO, but the complement is more intuitive); this is not needed in our case as our reference category becomes directly controls (intercept=controls)
+#exp.tt_data$logFC <- -exp.tt_data$logFC
+#exp.tt_data.TG <- exp.tt_data
+
+exp.tt_data
+
+#Export (full) table of OTU associations
+write.table(exp.tt_data, file="D:/EMBL_STAY/16SLabResults_SecondBatch/EdgeR/04122018_globalCrude_stool_unadjusted_OPEN (cases vs controls).csv", sep="\t", col.names=NA)
+
+#exp.otu_data.stool<-exp.tt_data # this is without controlling for anything
+
+aa<-exp.tt_data[exp.tt_data$significant==TRUE,]
+
+write.table(aa, "D:/EMBL_STAY/16SLabResults_SecondBatch/EdgeR/14012019_TRUEOPEN_PCcasesvsCtrls_stool.txt")
+
+```
+
+Some additional tests described in the edgeR package:
+
+```{r additional edgeR tests}
+
+et<-exactTest(exp.dge, pair=c("0","1"))
+topTags(et)
+
+et<-exactTest(exp.dge, pair=c("0","2"))
+topTags(et)
+
+et<-exactTest(exp.dge, pair=c("1","2"))
+topTags(et)
+
+levels(exp.dge$samples$group)
+
+## ANOVA-like test:
+fit<-glmQLFit(exp.dge, coef=2:3)
+qlf<-glmQLFTest(fit, coef=2:3)
+topTags(qlf)
+
+```
+
+
+
+
+## Plots
+
+```{r volcano plot, echo=FALSE}
+
+#Generate a volcano plot:
+curr.plot <- ggplot(exp.tt_data, aes(x=logFC, y=log10P, colour=significant, size=log10(exp.tt_data$local_OTU_size))) +
+  #Add points to plot
+  geom_point(alpha=0.7) +
+  #Scale area appropriately
+  scale_size_area() +
+  #Label axes
+  xlab("log2(fold change) of OTU abundance") +
+  ylab("-log10(p value)") +
+  #Set overall plotting theme
+  theme_bw()
+curr.plot
+
+#Plot trends per taxon
+exp.sig_data <- exp.tt_data[exp.tt_data$significant == "TRUE", ];
+
+#Fix taxonomic levels into factors
+
+exp.sig_data$genus = droplevels(exp.sig_data$genus)
+exp.sig_data$genus <- factor(exp.sig_data$genus, levels=c(sort(levels(exp.sig_data$genus)), "Unclassified")); exp.sig_data$genus[exp.sig_data$genus == ""] <- "Unclassified";
+exp.sig_data$phylum = droplevels(exp.sig_data$phylum)
+exp.sig_data$phylum <- factor(exp.sig_data$phylum, levels=c(sort(levels(exp.sig_data$phylum)), "Unclassified")); exp.sig_data$phylum[is.na(exp.sig_data$phylum)] <- "Unclassified";
+
+#Plot by phylum
+root.dir<-"D:/EMBL_STAY/16SLabResults_SecondBatch/EdgeR/"
+curr.plot <- ggplot(exp.sig_data, aes(x=genus, y=logFC, colour=phylum, fill=phylum, size=log10(exp.sig_data$local_OTU_size))) +
+  #Plot points per OTU, categorized by genus on the x axis
+  geom_point(alpha=0.8, position=position_jitterdodge()) +
+  #Use a color.brewer palette
+  scale_colour_brewer(type="qual", palette="Paired") +
+  #Label axes
+  xlab("Taxonomy at genus level") +
+  ylab("logFC") +
+  #Set overall plot theme
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust=0, vjust=0.5))
+curr.plot
+ggsave(filename=paste0(root.dir, "Differentially abundant genus in stool_16S_cases vs controls_unadjusted(OPEN).pdf"), plot=curr.plot, width = 10, height = 10) 
+
+# the same for family:
+exp.sig_data$family = droplevels(exp.sig_data$family)
+exp.sig_data$family <- factor(exp.sig_data$family, levels=c(sort(levels(exp.sig_data$family)), "Unclassified")); exp.sig_data$family[exp.sig_data$family == ""] <- "Unclassified";
+
+exp.sig_data$phylum = droplevels(exp.sig_data$phylum)
+exp.sig_data$phylum <- factor(exp.sig_data$phylum, levels=c(sort(levels(exp.sig_data$phylum)), "Unclassified")); exp.sig_data$phylum[is.na(exp.sig_data$phylum)] <- "Unclassified";
+
+#Plot by family
+root.dir<-"D:/EMBL_STAY/16SLabResults_SecondBatch/EdgeR/"
+curr.plot <- ggplot(exp.sig_data, aes(x=family, y=logFC, colour=phylum, fill=phylum, size=log10(exp.sig_data$local_OTU_size))) +
+  #Plot points per OTU, categorized by genus on the x axis
+  geom_point(alpha=0.8, position=position_jitterdodge()) +
+  #Use a color.brewer palette
+  scale_colour_brewer(type="qual", palette="Paired") +
+  #Label axes
+  xlab("Taxonomy at family level") +
+  ylab("logFC") +
+  #Set overall plot theme
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust=0, vjust=0.5))
+curr.plot
+ggsave(filename=paste0(root.dir, "Differentially abundant family in stool_16S_cases vs controls_unadjusted(OPEN).pdf"), plot=curr.plot, width = 10, height = 10) 
+
+```
