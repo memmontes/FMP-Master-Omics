@@ -1,0 +1,1285 @@
+---
+title: "Hiearchical clustering diet"
+author: "Esther Molina"
+date: '2022-08-03'
+output: 
+  html_document:
+   fig_width: 10
+   fig_height: 9
+   fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ 
+```
+
+## R Load the metaG data
+
+```{r, echo=FALSE, warning=FALSE}
+
+rarefiedOR.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedORMetaG.csv")
+rarefiedST.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedSTMetaG.csv")
+
+```
+
+
+
+
+## Plots: hierarchical clustering
+
+```{r, warning=FALSE}
+
+# Food groups to be used for clustering
+
+#myvars$gra_sgmilkyogurt<-myvars$gra8200+myvars$gra8100+myvars$gra8600+myvars$gra8500+myvars$gra9400
+#myvars$gra_sgcheesse<-myvars$gra8800+myvars$gra9000
+#myvars$gra_sgdairydessert<-myvars$gra9200
+
+#myvars$gra_sgwhitemeat<-myvars$gra_chi_tot+myvars$gra1200
+#myvars$gra_sgredmeat<-myvars$gra_vea_tot+myvars$gra_por_tot+myvars$gra_lam_tot
+#myvars$gra_sgorganmeat<-myvars$gra1300+myvars$gra1400
+#myvars$gra_sgcuredmeat<-myvars$gra2100+myvars$gra2200+myvars$gra2300
+#myvars$gra_sgprocessedmeat<-myvars$gra600+myvars$gra700+myvars$gra2500
+
+#myvars$gra_sgfish<-myvars$gra_wfish_tot+myvars$gra_bfish_tot
+#myvars$gra_sgothersea<-myvars$gra3200+myvars$gra3100+myvars$gra1800
+
+#myvars$gra_gallready<-myvars$gra2700+myvars$gra2800+myvars$gra_c_2900+myvars$gra13500
+
+#myvars$gra_sg1leafyveg<-myvars$gra3500+myvars$gra3400
+#myvars$gra_sg1starchveg<-myvars$gra4200+myvars$gra10300+myvars$gra10200
+#myvars$gra_sg1sgfruitingveg<-myvars$gra3600+myvars$gra3800+myvars$gra3700+myvars$gra4700+myvars$gra5200+myvars$gra4100+myvars$gra11630
+#myvars$gra_sg1sggrainsveg<-myvars$gra4300+myvars$gra5000+myvars$gra5100
+#myvars$gra_sg2redyellveg<-myvars$gra3600+myvars$gra4200+myvars$gra5100
+#myvars$gra_sg2greenveg<-myvars$gra3500+myvars$gra3400+myvars$gra3800+myvars$gra4300+myvars$gra5000+myvars$gra3700+myvars$gra4700+myvars$gra5200
+#myvars$gra_sg2whiteveg<-myvars$gra3800+myvars$gra11630+myvars$gra4500+myvars$gra4100
+
+#myvars$gra_gleg<-myvars$gra5810 ##only one
+
+#myvars$gra_gallfru<-myvars$gra6200+myvars$gra6300+myvars$gra6400+myvars$gra6500+myvars$gra7000+myvars$gra7200+myvars$gra6600+myvars$gra7300+myvars$gra6700+myvars$gra7600
+
+#myvars$gra_golives<-myvars$gra7800
+
+#myvars$gra_gnuts<-myvars$gra7900
+
+#myvars$gra_sgbread<-myvars$gra9600+myvars$gra9700
+#myvars$gra_sgricepasta<-myvars$gra10400+myvars$gra10500
+#myvars$gra_gallfats<-myvars$gra11700+myvars$gra11800+myvars$gra11300
+
+#myvars$gra_gflour<-myvars$gra12200+myvars$gra12500
+
+#myvars$gra_gchoc<-myvars$gra12900
+
+#myvars$gra_gsugar<-myvars$gra13100+myvars$gra13200
+
+#myvars$gra_gsauces<-myvars$gra11400+myvars$gra11610
+
+#myvars$gra_sgsugbev<-myvars$gra14300+myvars$gra14500+myvars$gra14700
+#myvars$gra_sgsoftdr<-myvars$gra14300+myvars$gra14400
+#myvars$gra_sgjuice<-myvars$gra14500+myvars$gra14700
+
+# 32 food groups, plus tea, coffee, wine, bear, sprits an fortified
+
+# make some changes in food groups:
+#myvars$gra_gallfats<-myvars$gra11700+myvars$gra11800+myvars$gra11300 #should be only vegetable fats and animal fats
+# sauces should include mayonnaise
+
+
+# load the data and retain these variables only (the scores are not to be used here)
+
+Foods<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/PanGen/QES/Data/Secciones trabajadas/Section Diet/MICROBIOME_PANGEN/FoodGrams/20072022_FoodGramsPM_complete.csv")
+
+Foods.GR<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/PanGen/QES/Data/Secciones trabajadas/Section Diet/MICROBIOME_PANGEN/FoodGrams/20072022_FoodGramsPM(GROUPS).csv")
+
+identical(Foods$subject, Foods.GR$subject)
+
+Foods.GR$gra_coffee<-Foods$gra_coffee
+Foods.GR$gra_decoffee<-Foods$gra_decoffee
+Foods.GR$gra_tea<-Foods$gra_tea
+Foods.GR$gra_wine<-Foods$wine2
+Foods.GR$gra_beer<-Foods$beer2
+Foods.GR$gra_spirits<-Foods$spirits2
+Foods.GR$gra_fortified<-Foods$fortified2
+
+
+Foods.GR$gra_gallfats<-Foods.GR$gra11700+Foods.GR$gra11800
+Foods.GR$gra_gsauces<-Foods.GR$gra11400+Foods.GR$gra11610+Foods.GR$gra11300
+Foods.GR$gra_gallfatsanimal<-Foods.GR$gra1500
+Foods.GR$gra_galleggs<-Foods.GR$gra1300
+
+# load the metadata:
+
+
+meta<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/PanGen/QES/Data/Microbiome_metadata/NEW UPDATE ALL VARIABLES/14052018_metadata_AllMicrobiome.csv", header=TRUE, sep=";")
+metaPM<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/Esther Molina/EMBL_STAY/Imputation/ImputationOnAllData/01062018_imputeddataNew.csv", header=TRUE, sep=";") # ONLY FOR THE SPANISH DATA
+
+#sc<-Foods.GR[,c(2,3,87:134)]
+
+sc<-Foods.GR[,c(2,4:85,126,127)]
+
+sc$gra_sgcuredprocessedmeat<-NULL
+
+#sc$gra_gallmeat<-NULL
+sc$gra_gallveg<-NULL
+#sc$gra_gallfru<-NULL
+sc$gra_gallcer<-NULL
+sc$gra_gnonalc<-NULL
+sc$gra_gallsea<-NULL
+sc$gra_meatseafood<-NULL
+#sc$gra_sg1leafyveg<-NULL
+#sc$gra_sg1sgfruitingveg<-NULL
+#sc$gra_sg1sggrainsveg<-NULL
+#sc$gra_sg2redyellveg<-NULL
+#sc$gra_sg2whiteveg<-NULL
+#sc$gra_sg2greenveg<-NULL
+
+sc$gra_decoffee<-ifelse(is.na(sc$gra_decoffee), 0, sc$gra_decoffee)
+sc$gra_coffee2<-sc$gra_coffee+sc$gra_decoffee
+sc$gra_coffee<-NULL
+sc$gra_decoffee<-NULL
+
+meta<-merge(metaPM, sc, by="subject")
+
+
+table(meta$final_eligibility)
+
+meta<-meta[meta$casecontrol!=2,]
+#meta<-meta[meta$final_eligibility!="NON ELIGIBLE",]
+
+# remove individuals without dietary information:
+
+meta<-meta[meta$subject!="3109131",]
+meta<-meta[meta$subject!="3109136",]
+meta<-meta[meta$subject!="3109140",]
+meta<-meta[meta$subject!="3109231",]
+
+# remove non-eligible subjects
+
+meta<-meta[meta$subject!="3103101",]
+meta<-meta[meta$subject!="3103105",]
+meta<-meta[meta$subject!="3103122",]
+meta<-meta[meta$subject!="3103123",]
+
+
+```
+
+
+
+
+# HIERARCHICAL CLUSTERING
+
+# First approach: cluster all dietary variables. We will explore two or three clusters, and different distance measures. Results will be shown by disease status mainly.
+
+# load the libraries:
+
+```{r, warning=FALSE}
+
+
+library(pheatmap)
+library(compareGroups)
+library(sjlabelled)
+library(ggplot2)
+library(ggpubr)
+library(magrittr)
+library(gridExtra)
+library(foreign)
+library(RColorBrewer)
+library(reshape)
+library(cluster)
+library(NbClust)
+
+
+```
+
+
+# define colors for all clusters:
+
+```{r, warning=FALSE}
+
+
+# define colors:
+paletteLength <- 50
+myBreaks <- c(seq(-3, 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(3/paletteLength, 3, length.out=floor(paletteLength/2)))
+myColor <- colorRampPalette(c("darkgreen", "grey90", "darkred")) (paletteLength)
+
+#myColor <- colorRampPalette(c("white", "red", "green", "black")) (paletteLength)
+
+```
+
+
+# scale the data
+
+```{r, warning=FALSE}
+
+
+#data<-meta[,c(45:78,83:85)]
+data<-meta[,c(44:125)]
+
+colnames(data)<-c("g_fatmilk",  "g_milk",       "g_fatyogurt",       "g_yogurt",    "g_freshcheese",       "g_curedcheese",  "g_pudding",  "g_icecream", "g_eggs",        "g_chicken", "g_beef",   "g_pork", "g_lam",   "g_othermeats",       "g_offals",       "g_offals2",       "g_bacon",       "g_wfish","g_bfish", "g_cannedfish",       "g_salt/smokedfish",       "g_squids", "g_sausages",       "g_hamburgers",   "g_hotdogs",       "g_freshham",       "g_curedham",       "g_salami",       "g_croquettes",       "g_sticks/snaks",  "g_readydishes",    "g_spinach",       "g_brocoli",       "g_salad",      "g_tomatoes",       "g_onion", "g_carrot",       "g_beans",       "g_peas",       "g_eggplant",       "g_peppers",       "g_artichoke", "g_asparagus",       "g_corn",       "g_legumes",       "g_oranges",       "g_banana",       "g_apple",  "g_pear",       "g_peach",   "g_melon",       "g_grapes",       "g_plums",       "g_kiwi", "g_fruitsyrup",      "g_olives",  "g_nuts",       "g_bread",       "g_wholebread",      "g_breakfastcereals", "g_frenchfries",      "g_potatoes",      "g_rice",      "g_pasta",      "g_pizza",      "g_oliveoil",   "g_otheroils", "g_cookies",      "g_croissant",      "g_chocolate",      "g_mermelade",      "g_sugar",     "g_mayonnaise", "g_tomatoesauce", "g_ketchup", "g_garlic",  "g_chips",  "g_sweetendbeverages",     "g_artificialsweetbeverages",   "g_naturaljuice",      "g_juice",      "g_cerealbeverages")
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+
+
+## to confirm that the values were scaled!!
+cal_z_score <- function(x){
+  (x - mean(x)) / sd(x)
+}
+ 
+data_subset_norm <- t(apply(data, 1, cal_z_score))
+#pheatmap(data_subset_norm)
+
+is.na(data) %>% table()
+is.infinite(data) %>% table()
+
+```
+
+#################################
+# PERFORM the clustering:
+# euclidean
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 2, cutree_cols = 1, angle_col = "90", main="Food groups, 2 clusters, all, Euclidean")
+out11_3cl
+
+```
+
+
+# manhattan
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", clustering_distance_cols = "manhattan", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 2, cutree_cols = 1, angle_col = "90", main="Food groups, 2 clusters, all, Manhattan")
+out11_3cl
+
+
+## Manhattan looks more reasonable; minkowski not shown, but is less consistent
+
+```
+
+
+# annotate characteristics
+
+```{r, warning=FALSE, message=FALSE}
+
+
+## annotate cases and diabetics
+
+metadata_cl<-meta[,c("casecontrol", "diabcat", "obese")]
+
+str(metadata_cl)
+
+metadata_cl$casecontrol <- factor(metadata_cl$casecontrol,
+levels = c(0,1),
+labels = c("controls", "cases"))
+
+metadata_cl$diabcat <- factor(metadata_cl$diabcat,
+levels = c(0,1,2),
+labels = c("non-diabetes", "NOD", "LSD"))
+
+metadata_cl$obese <- factor(metadata_cl$obese,
+levels = c(0,1),
+labels = c("non-obese", "obese"))
+
+
+```
+
+
+# euclidean:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", cex=1, clustering_distance_cols = "euclidean", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, Euclidean")
+out11_3clSS
+
+
+```
+
+
+# manhattan
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", cex=1, clustering_distance_cols = "manhattan", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, manhattan")
+out11_3clSS
+
+```
+
+
+# correlation
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", cex=1, clustering_distance_cols = "correlation", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, pearson")
+out11_3clSS
+
+```
+
+# restricted to the microbiome study
+
+```{r}
+
+meta2<-meta[meta$MetaG==1,]
+
+metadata_cl<-meta2[,c("casecontrol", "diabcat", "obese")]
+
+str(metadata_cl)
+
+metadata_cl$casecontrol <- factor(metadata_cl$casecontrol,
+levels = c(0,1),
+labels = c("controls", "cases"))
+
+metadata_cl$diabcat <- factor(metadata_cl$diabcat,
+levels = c(0,1,2),
+labels = c("non-diabetes", "NOD", "LSD"))
+
+metadata_cl$obese <- factor(metadata_cl$obese,
+levels = c(0,1),
+labels = c("non-obese", "obese"))
+
+
+
+#data<-meta2[,c(45:78,83:85)]
+data<-meta2[,c(44:125)]
+
+colnames(data)<-c("g_fatmilk",  "g_milk",       "g_fatyogurt",       "g_yogurt",    "g_freshcheese",       "g_curedcheese",  "g_pudding",  "g_icecream", "g_eggs",        "g_chicken", "g_beef",   "g_pork", "g_lam",   "g_othermeats",       "g_offals",       "g_offals2",       "g_bacon",       "g_wfish","g_bfish", "g_cannedfish",       "g_salt/smokedfish",       "g_squids", "g_sausages",       "g_hamburgers",   "g_hotdogs",       "g_freshham",       "g_curedham",       "g_salami",       "g_croquettes",       "g_sticks/snaks",  "g_readydishes",    "g_spinach",       "g_brocoli",       "g_salad",      "g_tomatoes",       "g_onion", "g_carrot",       "g_beans",       "g_peas",       "g_eggplant",       "g_peppers",       "g_artichoke", "g_asparagus",       "g_corn",       "g_legumes",       "g_oranges",       "g_banana",       "g_apple",  "g_pear",       "g_peach",   "g_melon",       "g_grapes",       "g_plums",       "g_kiwi", "g_fruitsyrup",      "g_olives",  "g_nuts",       "g_bread",       "g_wholebread",      "g_breakfastcereals", "g_frenchfries",      "g_potatoes",      "g_rice",      "g_pasta",      "g_pizza",      "g_oliveoil",   "g_otheroils", "g_cookies",      "g_croissant",      "g_chocolate",      "g_mermelade",      "g_sugar",     "g_mayonnaise", "g_tomatoesauce", "g_ketchup", "g_garlic",  "g_chips",  "g_sweetendbeverages",     "g_artificialsweetbeverages",   "g_naturaljuice",      "g_juice",      "g_cerealbeverages")
+
+
+#data<-meta2[,c(44:125)]
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", cex=1, clustering_distance_cols = "euclidean", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, Euclidean within Microbiome")
+out11_3clSS
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", cex=1, clustering_distance_cols = "manhattan", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, manhattan within Microbiome")
+out11_3clSS
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", cex=1, clustering_distance_cols = "correlation", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, pearson within Microbiome")
+out11_3clSS
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "minkowski", cex=1, clustering_distance_cols = "minkowski", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, minkowski within Microbiome")
+out11_3clSS
+
+```
+
+
+#########################################################################
+# add the bacterial species: 50 most prevalent in metagenomic stool data
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+#need to extract cases and controls, and link both to the meta2 dataset
+
+load("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/metag.pc.metadata.imputed.RData")
+
+load("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/metag.pc.metadata.RData")
+
+load("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/data.table.metag.RData")
+
+rm(motu.abs.3mg)
+
+rarefiedOR.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedORMetaG.csv", header=TRUE)
+rarefiedST.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedSTMetaG.csv", header=TRUE)
+
+#load("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/metag.alphadiv.RData")
+
+# obtain relative frequencies:
+
+#Transpose the data to have sample names on rows
+dim(rarefiedST.metaG)
+rownames(rarefiedST.metaG)<-rarefiedST.metaG$X
+rarefiedST.metaG$X<-NULL
+
+abund_table<-t(rarefiedST.metaG)
+dim(abund_table)
+str(abund_table)
+
+#Apply proportion normalisation
+x<-abund_table/rowSums(abund_table)
+
+#x<-x[rownames(stool),]
+x<-x[,order(colSums(x),decreasing=TRUE)]
+
+#x<-x[rownames(oral),]
+#x<-x[,order(colSums(x),decreasing=TRUE)]
+
+
+#Extract list of top N Taxa
+N<-49
+taxa_list<-colnames(x)[1:N]
+
+#remove "__Unknown__" and add it to others
+taxa_list<-taxa_list[!grepl("Unknown",taxa_list)]
+N<-length(taxa_list)
+ 
+#Generate a new table with everything added to Others
+#new_x<-data.frame(x[,colnames(x) %in% taxa_list])
+new_x<-data.frame(x[,colnames(x) %in% taxa_list],Others=rowSums(x[,!colnames(x) %in% taxa_list]))
+
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+table(metag.imputed$subject_disease_status)
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese")]
+
+metag<-metag.imputed[,c("sample_alias", "subject_id")]
+
+
+#data<-meta[,c(45:78,83:85)]
+data<-meta2[,c(44:125)]
+
+colnames(data)<-c("g_fatmilk",  "g_milk",       "g_fatyogurt",       "g_yogurt",    "g_freshcheese",       "g_curedcheese",  "g_pudding",  "g_icecream", "g_eggs",        "g_chicken", "g_beef",   "g_pork", "g_lam",   "g_othermeats",       "g_offals",       "g_offals2",       "g_bacon",       "g_wfish","g_bfish", "g_cannedfish",       "g_salt/smokedfish",       "g_squids", "g_sausages",       "g_hamburgers",   "g_hotdogs",       "g_freshham",       "g_curedham",       "g_salami",       "g_croquettes",       "g_sticks/snaks",  "g_readydishes",    "g_spinach",       "g_brocoli",       "g_salad",      "g_tomatoes",       "g_onion", "g_carrot",       "g_beans",       "g_peas",       "g_eggplant",       "g_peppers",       "g_artichoke", "g_asparagus",       "g_corn",       "g_legumes",       "g_oranges",       "g_banana",       "g_apple",  "g_pear",       "g_peach",   "g_melon",       "g_grapes",       "g_plums",       "g_kiwi", "g_fruitsyrup",      "g_olives",  "g_nuts",       "g_bread",       "g_wholebread",      "g_breakfastcereals", "g_frenchfries",      "g_potatoes",      "g_rice",      "g_pasta",      "g_pizza",      "g_oliveoil",   "g_otheroils", "g_cookies",      "g_croissant",      "g_chocolate",      "g_mermelade",      "g_sugar",     "g_mayonnaise", "g_tomatoesauce", "g_ketchup", "g_garlic",  "g_chips",  "g_sweetendbeverages",     "g_artificialsweetbeverages",   "g_naturaljuice",      "g_juice",      "g_cerealbeverages")
+
+
+rownames(data)<-meta2$subject
+
+#head(new_x) # this is stool
+
+# add the subject ID
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by="sample_alias")
+
+rownames(new_x)<-new_x$subject_id
+
+new_x$subject_id<-NULL
+new_x$sample_alias<-NULL
+
+data<-merge(data, new_x, by="row.names")
+
+rownames(data)<-data$Row.names
+data$Row.names<-NULL
+
+#head(data)
+
+
+```
+
+# perform the clustering:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+
+
+## to confirm that the values were scaled!!
+cal_z_score <- function(x){
+  (x - mean(x)) / sd(x)
+}
+ 
+data_subset_norm <- t(apply(data, 1, cal_z_score))
+
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 3, cutree_cols = 1, angle_col = "90", main="Food groups, 2 clusters, all, Euclidean Stool")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", clustering_distance_cols = "manhattan", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 3, cutree_cols = 1, angle_col = "90", main="Food groups, 2 clusters, all, Manhattan Stool")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", clustering_distance_cols = "correlation", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 3, cutree_cols = 1, angle_col = "90", main="Food groups, 2 clusters, all, Pearson Stool")
+out11_3cl
+
+```
+
+
+# add the bacterial species: 27 of the metagenomic signature
+
+```{r}
+
+# the 27 species of the signature:
+
+species<-c("Methanobrevibacter smithii [r_03695]", "Veillonella atypica [r_01941]", "Firmicutes sp. [r_03641]", "Clostridium sp. [r_03622]", "Bacteroides finegoldii [r_03474]", "Firmicutes sp. [r_03629]", "bacterium LF-3 [r_03628]", "Alloscardovia omnicolens [r_02114]", "Prevotella species  [m_12780]", "Veillonella species  [m_13135]", "Butyrivibrio crossotus [r_03686]", "Clostridiales species  [m_13012]", "Megamonas funiformis/rupellensis [r_02318]", "Holdemanella biformis [m_12329]", "Dorea sp. CAG:317 [r_07668]", "Bifidobacterium ruminantium [r_02702]", "Bacteroides caecimuris [r_03476]", "Bacteroides sp. CAG:144 [m_12596]", "Faecalibacterium species  [m_12403]", "Rikenellaceae sp. [r_03593]", "Paraprevotella clara [r_03698]", "Clostridium sp. CAG:217 [m_12270]", "[Eubacterium] rectale [r_03657]", "Bacteroides coprocola [r_11279]", "Faecalibacterium prausnitzii [r_06110]", "Bifidobacterium bifidum [r_03116]", "Romboutsia timonensis [r_09389]")
+
+#grep("09389", colnames(x))
+
+#aa<-x[,c(195,235)]
+
+# extract those species from the data:
+
+x<-abund_table/rowSums(abund_table)
+
+ 
+#Generate a new table with everything added to Others
+new_x<-data.frame(x[,colnames(x) %in% species])
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+table(metag.imputed$subject_disease_status)
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese")]
+
+metag<-metag.imputed[,c("sample_alias", "subject_id")]
+
+
+#data<-meta[,c(45:78,83:85)]
+
+data<-meta[,c(44:125)]
+
+colnames(data)<-c("g_fatmilk",  "g_milk",       "g_fatyogurt",       "g_yogurt",    "g_freshcheese",       "g_curedcheese",  "g_pudding",  "g_icecream", "g_eggs",        "g_chicken", "g_beef",   "g_pork", "g_lam",   "g_othermeats",       "g_offals",       "g_offals2",       "g_bacon",       "g_wfish","g_bfish", "g_cannedfish",       "g_salt/smokedfish",       "g_squids", "g_sausages",       "g_hamburgers",   "g_hotdogs",       "g_freshham",       "g_curedham",       "g_salami",       "g_croquettes",       "g_sticks/snaks",  "g_readydishes",    "g_spinach",       "g_brocoli",       "g_salad",      "g_tomatoes",       "g_onion", "g_carrot",       "g_beans",       "g_peas",       "g_eggplant",       "g_peppers",       "g_artichoke", "g_asparagus",       "g_corn",       "g_legumes",       "g_oranges",       "g_banana",       "g_apple",  "g_pear",       "g_peach",   "g_melon",       "g_grapes",       "g_plums",       "g_kiwi", "g_fruitsyrup",      "g_olives",  "g_nuts",       "g_bread",       "g_wholebread",      "g_breakfastcereals", "g_frenchfries",      "g_potatoes",      "g_rice",      "g_pasta",      "g_pizza",      "g_oliveoil",   "g_otheroils", "g_cookies",      "g_croissant",      "g_chocolate",      "g_mermelade",      "g_sugar",     "g_mayonnaise", "g_tomatoesauce", "g_ketchup", "g_garlic",  "g_chips",  "g_sweetendbeverages",     "g_artificialsweetbeverages",   "g_naturaljuice",      "g_juice",      "g_cerealbeverages")
+
+
+rownames(data)<-meta$subject
+
+#head(new_x) # this is stool
+
+# add the subject ID
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by="sample_alias")
+
+rownames(new_x)<-new_x$subject_id
+
+new_x$subject_id<-NULL
+new_x$sample_alias<-NULL
+
+data<-merge(data, new_x, by="row.names")
+
+rownames(data)<-data$Row.names
+data$Row.names<-NULL
+
+#head(data)
+
+
+
+```
+
+
+# perform the clustering:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+
+
+## to confirm that the values were scaled!!
+cal_z_score <- function(x){
+  (x - mean(x)) / sd(x)
+}
+ 
+data_subset_norm <- t(apply(data, 1, cal_z_score))
+
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 4, cutree_cols = 1, angle_col = "90", main="Food groups, 4 clusters, all, Euclidean Stool signature")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", clustering_distance_cols = "manhattan", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 4, cutree_cols = 1, angle_col = "90", main="Food groups, 4 clusters, all, Manhattan Stool signature")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", clustering_distance_cols = "correlation", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 4, cutree_cols = 1, angle_col = "90", main="Food groups, 4 clusters, all, Pearson Stool signature")
+out11_3cl
+
+```
+
+
+## annotate by diasease status:
+
+```{r}
+
+
+
+#grep("09389", colnames(x))
+
+#aa<-x[,c(195,235)]
+
+# extract those species from the data:
+
+x<-abund_table/rowSums(abund_table)
+
+ 
+#Generate a new table with everything added to Others
+new_x<-data.frame(x[,colnames(x) %in% species])
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+table(metag.imputed$subject_disease_status)
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese")]
+
+metag<-metag.imputed[,c("sample_alias", "subject_id")]
+
+
+#data<-meta[,c(45:78,83:85)]
+
+data<-meta[,c(44:125)]
+
+colnames(data)<-c("g_fatmilk",  "g_milk",       "g_fatyogurt",       "g_yogurt",    "g_freshcheese",       "g_curedcheese",  "g_pudding",  "g_icecream", "g_eggs",        "g_chicken", "g_beef",   "g_pork", "g_lam",   "g_othermeats",       "g_offals",       "g_offals2",       "g_bacon",       "g_wfish","g_bfish", "g_cannedfish",       "g_salt/smokedfish",       "g_squids", "g_sausages",       "g_hamburgers",   "g_hotdogs",       "g_freshham",       "g_curedham",       "g_salami",       "g_croquettes",       "g_sticks/snaks",  "g_readydishes",    "g_spinach",       "g_brocoli",       "g_salad",      "g_tomatoes",       "g_onion", "g_carrot",       "g_beans",       "g_peas",       "g_eggplant",       "g_peppers",       "g_artichoke", "g_asparagus",       "g_corn",       "g_legumes",       "g_oranges",       "g_banana",       "g_apple",  "g_pear",       "g_peach",   "g_melon",       "g_grapes",       "g_plums",       "g_kiwi", "g_fruitsyrup",      "g_olives",  "g_nuts",       "g_bread",       "g_wholebread",      "g_breakfastcereals", "g_frenchfries",      "g_potatoes",      "g_rice",      "g_pasta",      "g_pizza",      "g_oliveoil",   "g_otheroils", "g_cookies",      "g_croissant",      "g_chocolate",      "g_mermelade",      "g_sugar",     "g_mayonnaise", "g_tomatoesauce", "g_ketchup", "g_garlic",  "g_chips",  "g_sweetendbeverages",     "g_artificialsweetbeverages",   "g_naturaljuice",      "g_juice",      "g_cerealbeverages")
+
+
+rownames(data)<-meta$subject
+
+#head(new_x) # this is stool
+
+# add the subject ID
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by="sample_alias")
+
+rownames(new_x)<-new_x$subject_id
+
+new_x$subject_id<-NULL
+new_x$sample_alias<-NULL
+
+data<-merge(data, new_x, by="row.names")
+
+rownames(data)<-data$Row.names
+data$Row.names<-NULL
+
+#head(data)
+
+
+meta2<-meta[meta$MetaG==1,]
+
+names(meta2)
+
+# put everything in the same order:
+meta2<-meta2[meta2$subject %in% rownames(data),]
+rownames(meta2)<-meta2$subject
+meta2<-meta2[rownames(data),]
+
+identical(rownames(meta2),rownames(data))
+
+metadata_cl<-meta2[,c("casecontrol", "diabcat", "obese")]
+
+str(metadata_cl)
+
+metadata_cl$casecontrol <- factor(metadata_cl$casecontrol,
+levels = c(0,1),
+labels = c("controls", "cases"))
+
+metadata_cl$diabcat <- factor(metadata_cl$diabcat,
+levels = c(0,1,2),
+labels = c("non-diabetes", "NOD", "LSD"))
+
+metadata_cl$obese <- factor(metadata_cl$obese,
+levels = c(0,1),
+labels = c("non-obese", "obese"))
+
+
+
+#data<-meta2[,c(45:78)]
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+identical(rownames(meta2), colnames(data))
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", cex=1, clustering_distance_cols = "euclidean", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, Euclidean within Microbiome signature Annotated")
+out11_3clSS
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", cex=1, clustering_distance_cols = "manhattan", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, manhattan within Microbiome signature Annotated")
+out11_3clSS
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", cex=1, clustering_distance_cols = "correlation", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, pearson within Microbiome signature Annotated")
+out11_3clSS
+
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "minkowski", cex=1, clustering_distance_cols = "minkowski", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="2 diet clusters, sep, minkowski within Microbiome signature Annotated")
+out11_3clSS
+
+```
+
+
+
+# add the bacterial species: 50 most prevalent in metagenomic oral data
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+# obtain relative frequencies:
+
+#Transpose the data to have sample names on rows
+dim(rarefiedOR.metaG)
+rownames(rarefiedOR.metaG)<-rarefiedOR.metaG$X
+rarefiedOR.metaG$X<-NULL
+
+abund_table<-t(rarefiedOR.metaG)
+dim(abund_table)
+str(abund_table)
+
+#Apply proportion normalisation
+x<-abund_table/rowSums(abund_table)
+
+#x<-x[rownames(stool),]
+x<-x[,order(colSums(x),decreasing=TRUE)]
+
+#x<-x[rownames(oral),]
+#x<-x[,order(colSums(x),decreasing=TRUE)]
+
+
+#Extract list of top N Taxa
+N<-49
+taxa_list<-colnames(x)[1:N]
+
+#remove "__Unknown__" and add it to others
+taxa_list<-taxa_list[!grepl("Unknown",taxa_list)]
+N<-length(taxa_list)
+ 
+#Generate a new table with everything added to Others
+new_x<-data.frame(x[,colnames(x) %in% taxa_list],Others=rowSums(x[,!colnames(x) %in% taxa_list]))
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+table(metag.imputed$subject_disease_status)
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese")]
+
+metag<-metag.imputed[,c("sample_alias", "subject_id")]
+
+
+#data<-meta[,c(45:78,83:85)]
+
+
+data<-meta[,c(44:125)]
+
+colnames(data)<-c("g_fatmilk",  "g_milk",       "g_fatyogurt",       "g_yogurt",    "g_freshcheese",       "g_curedcheese",  "g_pudding",  "g_icecream", "g_eggs",        "g_chicken", "g_beef",   "g_pork", "g_lam",   "g_othermeats",       "g_offals",       "g_offals2",       "g_bacon",       "g_wfish","g_bfish", "g_cannedfish",       "g_salt/smokedfish",       "g_squids", "g_sausages",       "g_hamburgers",   "g_hotdogs",       "g_freshham",       "g_curedham",       "g_salami",       "g_croquettes",       "g_sticks/snaks",  "g_readydishes",    "g_spinach",       "g_brocoli",       "g_salad",      "g_tomatoes",       "g_onion", "g_carrot",       "g_beans",       "g_peas",       "g_eggplant",       "g_peppers",       "g_artichoke", "g_asparagus",       "g_corn",       "g_legumes",       "g_oranges",       "g_banana",       "g_apple",  "g_pear",       "g_peach",   "g_melon",       "g_grapes",       "g_plums",       "g_kiwi", "g_fruitsyrup",      "g_olives",  "g_nuts",       "g_bread",       "g_wholebread",      "g_breakfastcereals", "g_frenchfries",      "g_potatoes",      "g_rice",      "g_pasta",      "g_pizza",      "g_oliveoil",   "g_otheroils", "g_cookies",      "g_croissant",      "g_chocolate",      "g_mermelade",      "g_sugar",     "g_mayonnaise", "g_tomatoesauce", "g_ketchup", "g_garlic",  "g_chips",  "g_sweetendbeverages",     "g_artificialsweetbeverages",   "g_naturaljuice",      "g_juice",      "g_cerealbeverages")
+
+
+rownames(data)<-meta$subject
+
+#head(new_x) # this is stool
+
+# add the subject ID
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by="sample_alias")
+
+rownames(new_x)<-new_x$subject_id
+
+new_x$subject_id<-NULL
+new_x$sample_alias<-NULL
+
+data<-merge(data, new_x, by="row.names")
+
+rownames(data)<-data$Row.names
+data$Row.names<-NULL
+
+#head(data)
+
+
+
+
+
+
+meta2<-meta[meta$MetaG==1,]
+
+names(meta2)
+
+# put everything in the same order:
+meta2<-meta2[meta2$subject %in% rownames(data),]
+rownames(meta2)<-meta2$subject
+meta2<-meta2[rownames(data),]
+
+identical(rownames(meta2),rownames(data))
+
+metadata_cl<-meta2[,c("casecontrol", "diabcat", "obese")]
+
+str(metadata_cl)
+
+metadata_cl$casecontrol <- factor(metadata_cl$casecontrol,
+levels = c(0,1),
+labels = c("controls", "cases"))
+
+metadata_cl$diabcat <- factor(metadata_cl$diabcat,
+levels = c(0,1,2),
+labels = c("non-diabetes", "NOD", "LSD"))
+
+metadata_cl$obese <- factor(metadata_cl$obese,
+levels = c(0,1),
+labels = c("non-obese", "obese"))
+
+
+
+#data<-meta2[,c(45:78)]
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+identical(rownames(meta2), colnames(data))
+
+
+
+```
+
+
+
+
+# perform the clustering:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+#data<-as.data.frame(t(data))
+
+#data<-as.matrix(data)
+
+
+## to confirm that the values were scaled!!
+cal_z_score <- function(x){
+  (x - mean(x)) / sd(x)
+}
+ 
+data_subset_norm <- t(apply(data, 1, cal_z_score))
+
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 4, cutree_cols = 2, angle_col = "90", main="Food groups, 4 clusters, all, Euclidean Oral microbiome annotated")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", clustering_distance_cols = "manhattan", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 4, cutree_cols = 2, angle_col = "90", main="Food groups, 4 clusters, all, Manhattan Oral microbiome annotated")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", clustering_distance_cols = "correlation", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 4, cutree_cols = 2, angle_col = "90", main="Food groups, 4 clusters, all, Pearson Oral microbiome annotated")
+out11_3cl
+
+```
+
+
+
+#########################################################################
+
+# add the bacterial speciles: 50 most prevalent in 16s stool data?
+
+```{r}
+
+
+# load the 16s data:
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVdatasample_pooledEligible.Rdata")
+
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+
+# also bring the otu tables here:
+# load the otudata:
+
+load(file="C:/CNIO_14102019/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="C:/CNIO_14102019/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+
+# put everything in the same format: for ASV data
+
+t.asv<-as.data.frame(t(t.asv.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.ASV[otu.data.ASV$ASV_name %in% rownames(t.asv) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$ASV_name
+
+#rownames(t.asv)<-otdata$consensus_taxonomy
+
+otdata<-otdata[rownames(t.asv),]
+
+# to check:
+identical(rownames(otdata), rownames(t.asv)) # TRUE
+
+# ot data is my otu taxonomy table!
+
+
+
+
+
+data.sample_OR<-subset(data.sample, data.sample$site=="oral cavity")
+data.sample_ST<-subset(data.sample, data.sample$site=="stool")
+
+rarefiedOR.16s<-t.asv.pooled[rownames(data.sample_OR),] # extract ano.saliva otu_table
+# remove OTUs with 0 reads in total:
+#a.no.saliva = a.no.saliva[,colSums(a.no.saliva) > 0] # here I keep 872 OTUs in saliva with the 2.5% filter; if we go for all I keep 2604 in saliva
+
+rarefiedST.16s<-t.asv.pooled[rownames(data.sample_ST),] # extract ano.saliva otu_table
+# remove OTUs with 0 reads in total:
+#a.no.stool = a.no.stool[,colSums(a.no.stool) > 0] # here I keep 473 OTUs in stool with the 2.5% filter; if we go for all I keep 1355 OTUs in stool
+
+dim(rarefiedOR.16s)
+
+dim(rarefiedST.16s)
+
+# obtain relative frequencies:
+
+abund_table<-rarefiedST.16s
+dim(abund_table)
+str(abund_table)
+
+#Apply proportion normalisation
+x<-abund_table/rowSums(abund_table)
+
+#x<-x[rownames(stool),]
+x<-x[,order(colSums(x),decreasing=TRUE)]
+
+#x<-x[rownames(oral),]
+#x<-x[,order(colSums(x),decreasing=TRUE)]
+
+
+#Extract list of top N Taxa
+N<-49
+taxa_list<-colnames(x)[1:N]
+
+#remove "__Unknown__" and add it to others
+taxa_list<-taxa_list[!grepl("Unknown",taxa_list)]
+N<-length(taxa_list)
+ 
+#Generate a new table with everything added to Others
+new_x<-data.frame(x[,colnames(x) %in% taxa_list],Others=rowSums(x[,!colnames(x) %in% taxa_list]))
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+
+# bring the imputed metadata, which is contained in data.sample.OR
+
+
+table(data.sample_ST$casecontrol)
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese")]
+
+metag<-data.sample_ST[,c("MMPCID", "subject")]
+
+
+data<-meta[,c(44:125)]
+
+colnames(data)<-c("g_fatmilk",  "g_milk",       "g_fatyogurt",       "g_yogurt",    "g_freshcheese",       "g_curedcheese",  "g_pudding",  "g_icecream", "g_eggs",        "g_chicken", "g_beef",   "g_pork", "g_lam",   "g_othermeats",       "g_offals",       "g_offals2",       "g_bacon",       "g_wfish","g_bfish", "g_cannedfish",       "g_salt/smokedfish",       "g_squids", "g_sausages",       "g_hamburgers",   "g_hotdogs",       "g_freshham",       "g_curedham",       "g_salami",       "g_croquettes",       "g_sticks/snaks",  "g_readydishes",    "g_spinach",       "g_brocoli",       "g_salad",      "g_tomatoes",       "g_onion", "g_carrot",       "g_beans",       "g_peas",       "g_eggplant",       "g_peppers",       "g_artichoke", "g_asparagus",       "g_corn",       "g_legumes",       "g_oranges",       "g_banana",       "g_apple",  "g_pear",       "g_peach",   "g_melon",       "g_grapes",       "g_plums",       "g_kiwi", "g_fruitsyrup",      "g_olives",  "g_nuts",       "g_bread",       "g_wholebread",      "g_breakfastcereals", "g_frenchfries",      "g_potatoes",      "g_rice",      "g_pasta",      "g_pizza",      "g_oliveoil",   "g_otheroils", "g_cookies",      "g_croissant",      "g_chocolate",      "g_mermelade",      "g_sugar",     "g_mayonnaise", "g_tomatoesauce", "g_ketchup", "g_garlic",  "g_chips",  "g_sweetendbeverages",     "g_artificialsweetbeverages",   "g_naturaljuice",      "g_juice",      "g_cerealbeverages")
+
+
+#data<-meta[,c(45:78,83:85)]
+
+rownames(data)<-meta$subject
+
+
+
+
+
+
+# add the subject ID
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by.x="sample_alias", by.y="MMPCID")
+
+rownames(new_x)<-new_x$subject
+
+#verified
+
+#new_x$subject<-NULL
+new_x$sample_alias<-NULL
+
+#`%!in%` <- Negate(`%in%`)
+
+#aa<-data[rownames(data) %in% rownames(new_x),]
+
+#aa<-data[rownames(new_x) %!in% rownames(data),]
+
+#rownames(aa)
+
+data$subject<-rownames(data)
+
+data<-merge(new_x, data, by="subject")
+
+# here, only 330 observations remain with dietary data
+
+new_x$subject<-NULL
+rownames(data)<-data$subject
+data$subject<-NULL
+
+
+
+# put everything in the same order:
+
+meta2<-meta
+
+meta2$subject<-as.character(meta2$subject)
+
+meta2<-meta2[meta2$subject %in% rownames(data),]
+
+rownames(meta2)<-meta2$subject
+meta2<-meta2[rownames(data),]
+
+identical(rownames(meta2),rownames(data))
+
+metadata_cl<-meta2[,c("casecontrol", "diabcat", "obese")]
+
+str(metadata_cl)
+
+metadata_cl$casecontrol <- factor(metadata_cl$casecontrol,
+levels = c(0,1),
+labels = c("controls", "cases"))
+
+metadata_cl$diabcat <- factor(metadata_cl$diabcat,
+levels = c(0,1,2),
+labels = c("non-diabetes", "NOD", "LSD"))
+
+metadata_cl$obese <- factor(metadata_cl$obese,
+levels = c(0,1),
+labels = c("non-obese", "obese"))
+
+
+
+#data<-meta2[,c(45:78)]
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+identical(rownames(meta2), colnames(data))
+
+
+
+```
+# perform clustering:
+
+
+```{r}
+
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 4, cutree_cols = 2, angle_col = "90", main="Food groups, 4 clusters, all, Euclidean Stool 16s annotated")
+out11_3cl
+
+
+grep("ASV_02491", rownames(otdata))
+
+aa<-otdata[c(396,394),]
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", clustering_distance_cols = "manhattan", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 3, cutree_cols = 2, angle_col = "90", main="Food groups, 3 clusters, all, Manhattan Stool 16s annotated")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", clustering_distance_cols = "correlation", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 3, cutree_cols = 2, angle_col = "90", main="Food groups, 3 clusters, all, Pearson Stool 16s annotated")
+out11_3cl
+
+```
+
+
+# add the bacterial speciles: 50 most prevalent in 16s oral data?
+
+```{r}
+
+# obtain relative frequencies:
+
+#Transpose the data to have sample names on rows
+dim(rarefiedOR.16s)
+#rownames(rarefiedOR.metaG)<-rarefiedOR.metaG$X
+#rarefiedOR.metaG$X<-NULL
+
+abund_table<-rarefiedOR.16s
+dim(abund_table)
+str(abund_table)
+
+#Apply proportion normalisation
+x<-abund_table/rowSums(abund_table)
+
+#x<-x[rownames(stool),]
+x<-x[,order(colSums(x),decreasing=TRUE)]
+
+#x<-x[rownames(oral),]
+#x<-x[,order(colSums(x),decreasing=TRUE)]
+
+
+#Extract list of top N Taxa
+N<-49
+taxa_list<-colnames(x)[1:N]
+
+#remove "__Unknown__" and add it to others
+taxa_list<-taxa_list[!grepl("Unknown",taxa_list)]
+N<-length(taxa_list)
+ 
+#Generate a new table with everything added to Others
+new_x<-data.frame(x[,colnames(x) %in% taxa_list],Others=rowSums(x[,!colnames(x) %in% taxa_list]))
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+
+# bring the imputed metadata, which is contained in data.sample.OR
+
+
+table(data.sample_OR$casecontrol)
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese")]
+
+metag<-data.sample_OR[,c("MMPCID", "subject")]
+
+
+#data<-meta[,c(45:78,83:85)]
+
+data<-meta[,c(44:125)]
+
+colnames(data)<-c("g_fatmilk",  "g_milk",       "g_fatyogurt",       "g_yogurt",    "g_freshcheese",       "g_curedcheese",  "g_pudding",  "g_icecream", "g_eggs",        "g_chicken", "g_beef",   "g_pork", "g_lam",   "g_othermeats",       "g_offals",       "g_offals2",       "g_bacon",       "g_wfish","g_bfish", "g_cannedfish",       "g_salt/smokedfish",       "g_squids", "g_sausages",       "g_hamburgers",   "g_hotdogs",       "g_freshham",       "g_curedham",       "g_salami",       "g_croquettes",       "g_sticks/snaks",  "g_readydishes",    "g_spinach",       "g_brocoli",       "g_salad",      "g_tomatoes",       "g_onion", "g_carrot",       "g_beans",       "g_peas",       "g_eggplant",       "g_peppers",       "g_artichoke", "g_asparagus",       "g_corn",       "g_legumes",       "g_oranges",       "g_banana",       "g_apple",  "g_pear",       "g_peach",   "g_melon",       "g_grapes",       "g_plums",       "g_kiwi", "g_fruitsyrup",      "g_olives",  "g_nuts",       "g_bread",       "g_wholebread",      "g_breakfastcereals", "g_frenchfries",      "g_potatoes",      "g_rice",      "g_pasta",      "g_pizza",      "g_oliveoil",   "g_otheroils", "g_cookies",      "g_croissant",      "g_chocolate",      "g_mermelade",      "g_sugar",     "g_mayonnaise", "g_tomatoesauce", "g_ketchup", "g_garlic",  "g_chips",  "g_sweetendbeverages",     "g_artificialsweetbeverages",   "g_naturaljuice",      "g_juice",      "g_cerealbeverages")
+
+#data<-meta[,c(44:125)]
+
+rownames(data)<-meta$subject
+
+
+
+
+
+
+#head(new_x) # this is stool
+
+# add the subject ID
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by.x="sample_alias", by.y="MMPCID")
+
+rownames(new_x)<-new_x$subject
+
+#verified
+
+#new_x$subject<-NULL
+new_x$sample_alias<-NULL
+
+#`%!in%` <- Negate(`%in%`)
+
+#aa<-data[rownames(data) %in% rownames(new_x),]
+
+#aa<-data[rownames(new_x) %!in% rownames(data),]
+
+#rownames(aa)
+
+data$subject<-rownames(data)
+
+data<-merge(new_x, data, by="subject")
+
+# here, only 330 observations remain with dietary data
+
+new_x$subject<-NULL
+rownames(data)<-data$subject
+data$subject<-NULL
+
+#rownames(data)<-data$Row.names
+#data$Row.names<-NULL
+
+#head(data)
+
+
+
+
+
+
+#meta2<-meta[meta$MetaG==1,]
+
+#names(meta2)
+
+# put everything in the same order:
+
+meta2<-meta
+
+meta2$subject<-as.character(meta2$subject)
+
+meta2<-meta2[meta2$subject %in% rownames(data),]
+
+rownames(meta2)<-meta2$subject
+meta2<-meta2[rownames(data),]
+
+identical(rownames(meta2),rownames(data))
+
+metadata_cl<-meta2[,c("casecontrol", "diabcat", "obese")]
+
+str(metadata_cl)
+
+metadata_cl$casecontrol <- factor(metadata_cl$casecontrol,
+levels = c(0,1),
+labels = c("controls", "cases"))
+
+metadata_cl$diabcat <- factor(metadata_cl$diabcat,
+levels = c(0,1,2),
+labels = c("non-diabetes", "NOD", "LSD"))
+
+metadata_cl$obese <- factor(metadata_cl$obese,
+levels = c(0,1),
+labels = c("non-obese", "obese"))
+
+
+
+#data<-meta2[,c(45:78)]
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+identical(rownames(meta2), colnames(data))
+
+
+```
+
+
+
+# perform clustering:
+
+
+```{r}
+
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 4, cutree_cols = 2, angle_col = "90", main="Food groups, 4 clusters, all, Euclidean Oral 16s annotated")
+out11_3cl
+
+
+grep("ASV_02491", rownames(otdata))
+
+aa<-otdata[c(396,394),]
+
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", clustering_distance_cols = "manhattan", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 3, cutree_cols = 2, angle_col = "90", main="Food groups, 3 clusters, all, Manhattan Oral 16s annotated")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", clustering_distance_cols = "correlation", cex=1, clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 3, cutree_cols = 2, angle_col = "90", main="Food groups, 3 clusters, all, Pearson Oral 16s annotated")
+out11_3cl
+
+```
+
+
