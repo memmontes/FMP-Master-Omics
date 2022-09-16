@@ -1,0 +1,528 @@
+---
+title: "DDR more associations"
+author: "Esther Molina"
+date: '2022-08-09'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# load the data and packages:
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+meta<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Section Diet/SCORES/020822_scores.csv", header=TRUE)
+
+meta2<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/Esther Molina/EMBL_STAY/Imputation/ImputationOnAllData/01062018_imputeddataNew.csv", header=TRUE, sep=";") # ONLY FOR THE SPANISH DATA
+
+
+#write.csv(FoodGramsPM.Group, "C:/Ordenador_German/MASTER_OMICS/TFM/Section Diet/SCORES/020822_FoodGramsPMGroup.csv")
+
+FoodGramsPM.Group<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Section Diet/SCORES/020822_FoodGramsPMGroup.csv")
+
+sample<-meta2[,c(1,2,5:43)]
+
+meta<-merge(meta, sample, by="subject")
+
+meta<-meta[meta$casecontrol!=2,]
+
+# bring the nutrients to add kcal
+
+#write.csv(NutrPM, "C:/Ordenador_German/MASTER_OMICS/TFM/Section Diet/SCORES/020822_NutrientsPM.csv")
+
+NutrPM<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Section Diet/SCORES/020822_NutrientsPM.csv")
+
+sample<-NutrPM[,c(2,6,12)]
+
+meta<-merge(meta, sample, by="subject")
+
+meta<-meta[meta$casecontrol!=2,]
+
+#write.csv(meta, "C:/Ordenador_German/MASTER_OMICS/TFM/0808_completedataScores.csv")
+
+library(compareGroups)
+
+```
+
+
+
+# some association and stratified analyses:
+
+```{r, warning=FALSE}
+
+#res<-compareGroups(casecontrol~., data=FoodGramsPM.Group[FoodGramsPM.Group$casecontrol!=2,], ref.no="no", method=1, include.miss = TRUE, compute.ratio = FALSE)
+#restab<-createTable(res, show.ratio = FALSE, hide.no = "n")
+#restab
+
+# this is microbiome study
+#res<-compareGroups(casecontrol~., data=FoodGramsPM.Group[FoodGramsPM.Group$casecontrol!=2 & is.na(FoodGramsPM.Group$TIPO),], ref.no="no", method=1, include.miss = TRUE, compute.ratio = FALSE)
+#restab<-createTable(res, show.ratio = FALSE, hide.no = "n")
+#restab
+
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(sex)+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(obese), data=meta[meta$MetaG==1 & meta$diabcat!=1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(sex)+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(obese), data=meta[meta$diabcat!=1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+# among normal weight+overweight:
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(sex)+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab), data=meta[meta$diabcat!=1 & meta$obese==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+
+#> exp(cbind(OR=coef(fit), confint(fit)))^2
+#Waiting for profiling to be done...
+#                         OR       2.5 %     97.5 %
+#(Intercept)       0.1199746 0.006529608   2.162036
+#DRRDSCORE             1.0593274 0.991533332   1.132363
+#agec              0.9896155 0.965728895   1.014026
+
+# among the obese:
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(sex)+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab), data=meta[meta$diabcat!=1 & meta$obese==1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+
+#> exp(cbind(OR=coef(fit), confint(fit)))^2
+#Waiting for profiling to be done...
+#                           OR        2.5 %       97.5 %
+#(Intercept)      3.085295e-03 3.920540e-06 1.904192e+00
+#DRRDSCORE            1.099184e+00 9.585014e-01 1.264743e+00
+#agec             9.998217e-01 9.425072e-01 1.061111e+00
+
+
+# among women:
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(obese), data=meta[meta$diabcat!=1 & meta$sex==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#Waiting for profiling to be done...
+#                          OR        2.5 %      97.5 %
+#(Intercept)       0.04800722 0.0009420222    2.336091
+#DRRDSCORE             1.12550451 1.0336139485    1.227685
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(obese), data=meta[meta$diabcat==0 & meta$sex==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.11341600 1.0164919629    1.221522
+
+# among men:
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(obese), data=meta[meta$diabcat!=1 & meta$sex==1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#> exp(cbind(OR=coef(fit), confint(fit)))^2
+#Waiting for profiling to be done...
+#                          OR       2.5 %      97.5 %
+#(Intercept)       0.07976664 0.002273048    2.706063
+#DRRDSCORE             1.00404554 0.922828976    1.092635
+
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(obese), data=meta[meta$diabcat==0 & meta$sex==1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            0.9768916 0.891387022   1.070344
+
+# interaction: Wald
+
+fit<-glm(casecontrol~DRRDSCORE*factor(sex)+agec+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(obese), data=meta[meta$diabcat!=1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+##DRRDSCORE:factor(sex): 0.099903 . 
+
+fit<-glm(casecontrol~DRRDSCORE*factor(sex)+agec+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(obese), data=meta[meta$diabcat==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE:factor(sex): 0.095102 .
+
+fit<-glm(casecontrol~DRRDSCORE*factor(obese)+agec+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta[meta$diabcat!=1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+##DRRDSCORE:factor(obese): 0.559144  
+
+
+# by type of study (interaction microbiome vs pangen):
+
+fit<-glm(casecontrol~DRRDSCORE*factor(MetaG)+agec+factor(center)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta[meta$diabcat!=1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE:factor(MetaG): 0.973617 
+
+######## for diabetes
+
+# interaction by diabetes:
+
+fit<-glm(casecontrol~DRRDSCORE*factor(alldiab)+agec+factor(obese)+factor(cpy1t)+kcal +factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#Wald: DRRDSCORE:factor(alldiab): 0.056563 .  
+
+fit<-glm(casecontrol~DRRDSCORE*factor(diabcat)+agec+factor(obese)+factor(cpy1t)+kcal +factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#Wald: DRRDSCORE:factor(alldiab): >0.05
+
+
+# goup by center:
+
+
+fit<-glm(casecontrol~DRRDSCORE*factor(center)+agec+factor(obese)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta[meta$diabcat!=1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#0 = H. del Mar
+#1 = H. de la Santa Creu I San Pau
+#2 = H. Vall d'Hebron
+#3 = H. General Univ de Elche
+#4 = H. Clínico Univ de Salamanca
+#5 = H. de Santiago de Compostela
+#6 = IUOPA
+#7 = H. 12 de Octubre
+#8 = H. Ramón y Cajal
+#9 = M. Madrid Norte Sanchinarro
+
+
+library(car)
+meta$center2<-recode(meta$center, "0=1; 1=1; 2=1; 3=1; 4=2; 5=2; 6=2; 7=3; 8=3; 9=3")
+
+table(meta$center2, useNA="always")
+
+
+# interaction by center among all except new-onset diabetics
+
+fit<-glm(casecontrol~DRRDSCORE*factor(center2)+agec+factor(obese)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta[meta$diabcat!=1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#DRRDSCORE:factor(center2)2 -9.865e-02  1.144e-01  -0.862 0.388504    
+#DRRDSCORE:factor(center2)3 -5.883e-02  3.180e-02  -1.850 0.064306 
+
+# interaction by center removing all diabetics (i.e., on non-diabetics only)
+
+fit<-glm(casecontrol~DRRDSCORE*factor(center2)+agec+factor(obese)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(sex), data=meta[meta$alldiab==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+
+#DRRDSCORE:factor(center2)2: 0.473817    
+#DRRDSCORE:factor(center2)3: 0.064952 .  Madrid vs Barcelona tends to be significant...
+
+# restrict to hospitals in Madrid:
+
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(obese)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta[meta$diabcat!=1 & meta$center2==3,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#                          OR       2.5 %      97.5 %
+#(Intercept)       0.04112023 0.002053792   0.7899489
+#DRRDSCORE        1.04837127 0.976536169   1.1260515 NOT SIGNIFICANT
+
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(obese)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex) + factor(center), data=meta[meta$diabcat!=1 & meta$center2==3,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+# Barcelona
+
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(obese)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta[meta$diabcat!=1 & meta$center2==1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#                         OR        2.5 %    97.5 %
+#(Intercept)      0.03626422 0.0003738764  3.292655
+#DRRDSCORE       1.17286971 1.0541592645  1.310165 SIGNIFICANT
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(obese)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex) + factor(center), data=meta[meta$diabcat!=1 & meta$center2==1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+# north:
+
+fit<-glm(casecontrol~DRRDSCORE+agec+factor(obese)+kcal+factor(cpy1t)+factor(FHPDAC) + factor(alldiab) + factor(sex), data=meta[meta$diabcat!=1 & meta$center2==2,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+
+#                           OR        2.5 %       97.5 %
+#(Intercept)      1.730064e+11 9.307479e-01 3.523755e+26
+#DRRDSCORE            5.422762e-01 2.109838e-01 1.094396e+00
+
+
+# by casecontrol status among all:
+
+fit<-glm(casecontrol~DRRDSCORE, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+# by casecontrol status among all except new-onset diabetes:
+
+fit<-glm(casecontrol~DRRDSCORE, data=meta[meta$diabcat!=1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0627407 1.00679653 1.1222758
+
+# by casecontrol status among all except DIABETICS (restricted to NON-Diabetes): turns non-significant!
+##################################################################################
+fit<-glm(casecontrol~DRRDSCORE, data=meta[meta$diabcat==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0477458 0.98865940 1.110753 **************************************
+#pval=0.1166  
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center), data=meta[meta$diabcat==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.0462149 0.9849626   1.111668
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t), data=meta[meta$diabcat==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.0358147 0.97387610   1.101999
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t) + factor(obese), data=meta[meta$diabcat==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.0357467 0.97381021   1.101932
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t) + factor(obese)+factor(alc_ddt), data=meta[meta$diabcat==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE             1.0333608 0.96648177   1.105216
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t) + factor(obese)+factor(nasal), data=meta[meta$diabcat==0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE             1.0333608 0.96648177   1.105216
+
+
+# by casecontrol status among all DIABETICS (restricted to Diabetes): turns very significant!
+##################################################################################
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t) + factor(obese)+factor(alc_ddt), data=meta[meta$diabcat!=0,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.255495e+00 1.062973e+00  1.499575e+00
+
+# as above, but restricted to long-standing diabetes
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t) + factor(obese)+factor(alc_ddt), data=meta[meta$diabcat==2,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.210086e+00 9.821580e-01  1.520941e+00
+
+# as above, but restricted to new-onset diabetes
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t) + factor(obese)+factor(alc_ddt), data=meta[meta$diabcat==1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.358564e+00  9.414913e-01    2.076174
+
+##################################################################################
+
+### DIABETES IS A CONFOUNDING FACTOR? or an effect modifier? or both?
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t) + factor(obese)+factor(alldiab), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE             1.0577677  1.00033886   1.118897
+#pval=0.049161 * 
+
+##################################################################################
+
+fit<-glm(casecontrol~DRRDSCORE+factor(diabcat), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE        1.0683082 1.01320030  1.1268786
+
+fit<-glm(casecontrol~DRRDSCORE+factor(alldiab), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE        1.072783 1.01774153  1.1312965
+
+# how to other factors influence the association?
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0779578 1.02302345 1.1364118
+
+fit<-glm(casecontrol~DRRDSCORE+agec, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0751301 1.0207471 1.132958
+
+fit<-glm(casecontrol~DRRDSCORE+factor(obese), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750159 1.02062698 1.1328486
+
+fit<-glm(casecontrol~DRRDSCORE+factor(FHPDAC), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE           1.0729624 1.01834640  1.1310422
+
+fit<-glm(casecontrol~DRRDSCORE+factor(center), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.0681477  1.01233360   1.127539
+
+fit<-glm(casecontrol~DRRDSCORE+factor(center2), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE            1.0805642 1.02549431 1.1391930
+
+fit<-glm(casecontrol~DRRDSCORE+factor(cpy1t), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE          1.0735156 1.01895135 1.1315308
+
+fit<-glm(casecontrol~DRRDSCORE+kcal, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.09699332 1.039762956 1.15809
+
+########################################################################
+########################################################################
+# look at the DRRDSCORE in tertiles
+
+meta$DRRDSCORET<-ifelse(meta$DRRDSCORE<24, 0, NA)
+meta$DRRDSCORET<-ifelse(meta$DRRDSCORE>=24, 1, meta$DRRDSCORET)
+meta$DRRDSCORET<-ifelse(meta$DRRDSCORE>=30, 2, meta$DRRDSCORET)
+
+fit<-glm(casecontrol~factor(DRRDSCORET), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))
+#factor(DRRDSCORET)1 1.1712125 0.8628965 1.591082
+#factor(DRRDSCORET)2 1.5133400 1.0844894 2.115439
+
+fit<-glm(casecontrol~factor(DRRDSCORET)+factor(diabcat), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))
+#factor(DRRDSCORET)1  1.1715997 0.8578915 1.6017226
+#factor(DRRDSCORET)2  1.4694278 1.0452314 2.0692761
+
+
+# control for every component at a time:
+
+fit<-glm(casecontrol~DRRDSCORE+SC_coffee, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0647813 1.00850310 1.1246774
+
+fit<-glm(casecontrol~DRRDSCORE+SC_nuts, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0632902 1.00462268 1.125838
+
+
+fit<-glm(casecontrol~DRRDSCORE+SC_meats, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0875255 1.02576239 1.1536418
+
+fit<-glm(casecontrol~DRRDSCORE+SC_juices, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0782912 1.01905033 1.1415481
+
+fit<-glm(casecontrol~DRRDSCORE+SC_fiber, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0862731 1.02218566 1.1549943
+
+fit<-glm(casecontrol~DRRDSCORE+SC_trans, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0942488 1.03264296 1.1602335
+
+fit<-glm(casecontrol~DRRDSCORE+SC_gi, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0739087 1.01951731 1.131739
+
+fit<-glm(casecontrol~DRRDSCORE+SC_ratio, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0767638 1.01898704 1.138342
+
+fit<-glm(casecontrol~DRRDSCORE+SC_fruits, data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.068976 1.01438227 1.1270049
+
+####################################################################
+# substract every component at a time:
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_coffee), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_nuts), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_meats), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_juices), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_fiber), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_trans), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_gi), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_ratio), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+fit<-glm(casecontrol~(DRRDSCORE-SC_fruits), data=meta, family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.0750522 1.02067922 1.1328682
+
+
+### restricted to the microbiome study;
+
+fit<-glm(casecontrol~DRRDSCORE+factor(sex)+agec+factor(center)+factor(FHPDAC)+factor(cpy1t) + factor(obese), data=meta[meta$diabcat!=0 & meta$MetaG==1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE           1.112780e+00 5.596069e-01 2.094536e+00
+
+fit<-glm(casecontrol~DRRDSCORE, data=meta[meta$diabcat!=0 & meta$MetaG==1,], family="binomial")
+summary(fit)
+exp(cbind(OR=coef(fit), confint(fit)))^2
+#DRRDSCORE       1.1646130 7.931652e-01    1.837449
+
+```
+
