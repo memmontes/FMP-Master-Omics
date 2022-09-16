@@ -1,0 +1,791 @@
+---
+title: "microbiome score"
+author: "Esther Molina"
+date: '2022-08-08'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#########################################################################
+# add the bacterial species: 27 species of the signature in metagenomic stool data
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+#need to extract cases and controls, and link both to the meta2 dataset
+
+load("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/metag.pc.metadata.imputed.RData")
+
+load("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/metag.pc.metadata.RData")
+
+load("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/data.table.metag.RData")
+
+rm(motu.abs.3mg)
+
+rarefiedOR.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedORMetaG.csv", header=TRUE)
+rarefiedST.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedSTMetaG.csv", header=TRUE)
+
+library(ggplot2)
+library(PredictABEL)
+
+
+```
+
+
+# relative abundance data:
+
+```{r}
+
+# obtain relative frequencies:
+
+#Transpose the data to have sample names on rows
+dim(rarefiedST.metaG)
+rownames(rarefiedST.metaG)<-rarefiedST.metaG$X
+rarefiedST.metaG$X<-NULL
+
+abund_table<-t(rarefiedST.metaG)
+dim(abund_table)
+str(abund_table)
+
+#Apply proportion normalisation
+x<-abund_table/rowSums(abund_table)
+
+
+# the 27 species of the signature:
+
+species<-c("Methanobrevibacter smithii [r_03695]", "Veillonella atypica [r_01941]", "Firmicutes sp. [r_03641]", "Clostridium sp. [r_03622]", "Bacteroides finegoldii [r_03474]", "Firmicutes sp. [r_03629]", "bacterium LF-3 [r_03628]", "Alloscardovia omnicolens [r_02114]", "Prevotella species  [m_12780]", "Veillonella species  [m_13135]", "Butyrivibrio crossotus [r_03686]", "Clostridiales species  [m_13012]", "Megamonas funiformis/rupellensis [r_02318]", "Holdemanella biformis [m_12329]", "Dorea sp. CAG:317 [r_07668]", "Bifidobacterium ruminantium [r_02702]", "Bacteroides caecimuris [r_03476]", "Bacteroides sp. CAG:144 [m_12596]", "Faecalibacterium species  [m_12403]", "Rikenellaceae sp. [r_03593]", "Paraprevotella clara [r_03698]", "Clostridium sp. CAG:217 [m_12270]", "[Eubacterium] rectale [r_03657]", "Bacteroides coprocola [r_11279]", "Faecalibacterium prausnitzii [r_06110]", "Bifidobacterium bifidum [r_03116]", "Romboutsia timonensis [r_09389]")
+
+ 
+#Generate a new table with these species
+new_x<-data.frame(x[,colnames(x) %in% species])
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+table(metag.imputed$subject_disease_status)
+
+metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese", "gender", "age_years", "Center", "cpy1t", "FHPDAC", "probiot", "metformin.ever")]
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id")]
+
+
+# merge the data:
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by="sample_alias")
+
+rownames(new_x)<-new_x$subject_id
+
+#new_x$subject_id<-NULL
+#new_x$sample_alias<-NULL
+
+```
+
+# Everything needed is in the same dataset; calculate the score excluding chronic pancreatitis cases:
+
+```{r}
+
+table(new_x$subject_disease_status)
+
+str(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-as.numeric(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-factor(new_x$subject_disease_status,
+                                     levels=c(1,2,3),
+                                     labels = c("cancer", "control", "pancreatitis"))
+
+
+new_x<-new_x[new_x$subject_disease_status!="pancreatitis",]
+
+library(car)
+
+new_x$subject_disease_status<-recode(new_x$subject_disease_status, "1=1; 2=0")
+
+table(new_x$subject_disease_status)
+
+str(new_x$subject_disease_status)
+
+
+new_x$subject_disease_status<-ifelse(new_x$subject_disease_status=="control",0, 1)
+
+table(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-as.factor(new_x$subject_disease_status)
+
+
+#new_x$subject_disease_status<-factor(new_x$subject_disease_status,
+#                                     levels=c(0,1),
+#                                     labels = c("control", "cancer"))
+
+# now we have 53 cancer cases recoded as 1, ad 48 conrols recoded as 0
+
+
+
+```
+########################################################################################################
+# calculate the unweighted scores: First, the relative score based on rarefied data (relative abundance)
+
+```{r}
+
+dim(new_x)
+
+r.score<-rowSums(new_x[,c(2:28)])
+
+summary(r.score) # this is the relative and unweighted microbiome score
+
+
+# results:
+mylogit1 <-glm (factor(new_x$subject_disease_status)~ r.score + factor(new_x$Center) + new_x$age_years + factor(new_x$gender), family=binomial)
+summary(mylogit1)
+Model1<-exp(cbind(OR=coef(mylogit1), confint(mylogit1)))
+Model1
+
+#r.score               -7.46320    3.87612  -1.925   0.0542 .
+
+Model1<-exp(cbind(OR=coef(mylogit1), confint(mylogit1)))^2
+#r.score               3.292661e-07 2.072929e-14 2.814504e-01
+
+
+# histograms:
+
+hist(r.score)
+
+new_x$r.score<-r.score
+
+ggplot(new_x, aes(x = r.score)) +
+  geom_histogram(aes(color = subject_disease_status), fill = "white",
+                position = "identity", bins = 30) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+
+# does not make sense? the beneficial ones should be scored inversely; depletion is detrimental. 
+# for the beneficial bacteria, we put the relative counts as "1-abundance"
+
+
+sp.r<-new_x[,c(2:28)]
+
+ff <- function(x) {
+    1-x
+}
+
+
+
+sp.r<-as.data.frame(lapply(sp.r[,c(9,18,17,12,7,2,5,14,22,10,26,3,13,6,23,20)], ff))
+sp.r<-cbind(sp.r, new_x[,c(2,20,25,9,26,12,16,28,22,9,5)]) # to join the bad species with their corresponding relative abundances
+
+head(sp.r)
+
+head(new_x)
+
+r.score<-rowSums(sp.r)
+
+mylogit1 <-glm (factor(new_x$subject_disease_status)~ r.score + factor(new_x$Center) + new_x$age_years + factor(new_x$gender), family=binomial)
+summary(mylogit1)
+Model1<-exp(cbind(OR=coef(mylogit1), confint(mylogit1)))^0.1 # this is per 0.1 increment in adherence (relative count)
+Model1
+
+#r.score               1.431397316 7.289600e-01   3.216811
+
+hist(r.score)
+
+new_x$r.score<-r.score
+
+summary(r.score) # this is the relative and unweighted microbiome score
+
+
+ggplot(new_x, aes(x = r.score)) +
+  geom_histogram(aes(color = subject_disease_status), fill = "white",
+                position = "identity", bins = 30) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+
+#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#  15.47   15.93   15.96   15.94   15.97   16.00 
+
+
+
+```
+
+# calculate the unweighted scores: the absolute score based on count data (not relative abundance!)
+
+```{r}
+
+
+
+abund_table<-rarefiedST.metaG
+dim(abund_table)
+str(abund_table)
+
+#Apply proportion normalisation
+x<-t(abund_table)
+
+# now without relative abundance!!
+ 
+#Generate a new table with these species
+new_x<-data.frame(x[,colnames(x) %in% species])
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+table(metag.imputed$subject_disease_status)
+
+metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese", "gender", "age_years", "Center", "cpy1t", "FHPDAC", "probiot", "metformin.ever")]
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id")]
+
+
+# merge the data:
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by="sample_alias")
+
+rownames(new_x)<-new_x$subject_id
+
+
+# recode again casecontrol status:
+
+
+table(new_x$subject_disease_status)
+
+str(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-as.numeric(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-factor(new_x$subject_disease_status,
+                                     levels=c(1,2,3),
+                                     labels = c("cancer", "control", "pancreatitis"))
+
+
+new_x<-new_x[new_x$subject_disease_status!="pancreatitis",]
+
+library(car)
+
+new_x$subject_disease_status<-recode(new_x$subject_disease_status, "1=1; 2=0")
+
+table(new_x$subject_disease_status)
+
+str(new_x$subject_disease_status)
+
+
+new_x$subject_disease_status<-ifelse(new_x$subject_disease_status=="control",0, 1)
+
+table(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-as.factor(new_x$subject_disease_status)
+
+# the score calculation:
+
+dim(new_x)
+
+head(new_x)
+
+a.score<-rowSums(new_x[,c(2:28)])
+
+summary(a.score) # this is the absolute and unweighted microbiome score
+#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#     12     151     384    1357     965   19428
+
+# results:
+mylogit1 <-glm (factor(new_x$subject_disease_status)~ a.score + factor(new_x$Center) + new_x$age_years + factor(new_x$gender), family=binomial)
+summary(mylogit1)
+Model1<-exp(cbind(OR=coef(mylogit1), confint(mylogit1)))
+Model1
+
+#a.score               1.0000286 0.99988677  1.000184
+
+# Again: # does not make sense? the beneficial ones should be scored inversely; depletion is detrimental. 
+# for the beneficial bacteria, we put the absolute counts as "abundance/10"
+
+
+sp.a<-new_x[,c(2:28)]
+
+ff <- function(x) {
+    (x/10)
+}
+
+
+sp.a<-as.data.frame(lapply(sp.a[,c(9,18,17,12,7,2,5,14,22,10,26,3,13,6,23,20)], ff))
+sp.a<-cbind(sp.a, new_x[,c(2,20,25,9,26,12,16,28,22,9,5)]) # to join the bad species with their corresponding relative abundances
+
+
+a.score<-rowSums(sp.a)
+
+mylogit1 <-glm (factor(new_x$subject_disease_status)~ a.score + factor(new_x$Center) + new_x$age_years + factor(new_x$gender), family=binomial)
+summary(mylogit1)
+Model1<-exp(cbind(OR=coef(mylogit1), confint(mylogit1)))^0.1 # this is per 0.1 increment in adherence (relative count)
+Model1
+
+#a.score               1.000003 0.9999887 1.000018
+
+hist(a.score)
+
+new_x$a.score<-a.score
+
+summary(a.score) # this is the absolute and unweighted microbiome score
+
+
+ggplot(new_x, aes(x = a.score)) +
+  geom_histogram(aes(color = subject_disease_status), fill = "white",
+                position = "identity", bins = 30) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+
+
+```
+
+# Does not make sense!! The microbiome score must be baesd on relative counts; i.e., on relative abundance data!!
+
+##########################################################################################
+# calculate the weighted score: RELATIVE counts
+
+```{r}
+
+rarefiedST.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedSTMetaG.csv", header=TRUE)
+
+dim(rarefiedST.metaG)
+rownames(rarefiedST.metaG)<-rarefiedST.metaG$X
+rarefiedST.metaG$X<-NULL
+
+abund_table<-t(rarefiedST.metaG)
+dim(abund_table)
+str(abund_table)
+
+#Apply proportion normalisation
+x<-abund_table/rowSums(abund_table)
+
+#Generate a new table with the 27 species
+new_x<-data.frame(x[,colnames(x) %in% species])
+
+table(metag.imputed$subject_disease_status)
+
+metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese", "gender", "age_years", "Center", "cpy1t", "FHPDAC", "probiot", "metformin.ever")]
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id")]
+
+
+# merge the data:
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by="sample_alias")
+
+rownames(new_x)<-new_x$subject_id
+
+
+table(new_x$subject_disease_status)
+
+str(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-as.numeric(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-factor(new_x$subject_disease_status,
+                                     levels=c(1,2,3),
+                                     labels = c("cancer", "control", "pancreatitis"))
+
+
+new_x<-new_x[new_x$subject_disease_status!="pancreatitis",]
+
+library(car)
+
+new_x$subject_disease_status<-recode(new_x$subject_disease_status, "1=1; 2=0")
+
+table(new_x$subject_disease_status)
+
+str(new_x$subject_disease_status)
+
+
+new_x$subject_disease_status<-ifelse(new_x$subject_disease_status=="control",0, 1)
+
+table(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-as.factor(new_x$subject_disease_status)
+
+
+sp.r2<-new_x[,c(2:28)]
+
+
+head(sp.r2) #note that we have considered that beneficial species if depleted, they increase risk; we need to flip the estimates
+
+
+# Model 3:
+j=1
+Results<-matrix(NA,27,4)
+for (i in 1:ncol(sp.r)) #Don't include subject column
+{
+  print(i)
+mod1a<- try(glm (factor(new_x$subject_disease_status) ~ as.numeric(sp.r[,i]) + factor(new_x$Center) + new_x$age_years + factor(new_x$gender), family=binomial))
+  Results[j,1]<-exp(summary(mod1a)$coeff[2,1])          #OR1
+  Results[j,2]<-exp(summary(mod1a)$coeff[2,1]-1.96*summary(mod1a)$coeff[2,2])   #CI1_low
+  Results[j,3]<-exp(summary(mod1a)$coeff[2,1]+1.96*summary(mod1a)$coeff[2,2])   #CI1_high
+  Results[j,4]<-summary(mod1a)$coeff[2,4]          #P1
+  j<-j+1
+}
+rownames(Results)<-colnames(sp.r[,c(1:27)]) 
+colnames(Results)<-c("OR" ,"LCI", "UCI", "P.value")
+#View(Results)
+
+Results
+
+#to adjust for multiple test
+p.bh<-p.adjust(Results[,4], "BH") #False discovery rate (Benjamini Hochberg)
+Results.adj=data.frame(cbind(Results,p.bh))
+#Results.adj <- Results.adj[order(Results.adj[,4]),] #All Results with FDR values
+#Results.significants<-Results.adj[Results.adj[,4]<0.05,] #Only significant results
+#View(Results.significants)
+Results.adj
+log(Results.adj$OR)
+
+
+#snp.to.flip<-rownames(Results.adj[Results.adj$OR<0,])
+#genodata.flipped<-sp.r2
+#idcol<-which(colnames(sp.r2) %in% snp.to.flip)
+#genodata.flipped[, idcol]<- (1-sp.r2[, idcol])
+
+#head(genodata.flipped)
+
+
+#weighted score
+w<-log(Results.adj$OR)
+w<-unlist(w)
+wr.mean=mean(w, na.rm=T)
+w <- ifelse(is.infinite(w), 0, w)
+wr.score<-rowSums(sp.r2*w, na.rm = FALSE, dims = 1)
+summary(wr.score)
+hist(wr.score)
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#   11.98   159.53   420.52  1495.64  1036.58 20619.96 
+
+
+# results:
+mylogit1 <-glm (factor(new_x$subject_disease_status)~ wr.score + factor(new_x$Center) + new_x$age_years + factor(new_x$gender), family=binomial)
+summary(mylogit1)
+Model1<-exp(cbind(OR=coef(mylogit1), confint(mylogit1)))
+Model1
+
+
+new_x$wr.score<-wr.score
+
+summary(wr.score) # this is the relative and unweighted microbiome score
+#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#    -15      72     212    1076     708   19061
+
+ggplot(new_x, aes(x = wr.score)) +
+  geom_histogram(aes(color = subject_disease_status), fill = "white",
+                position = "identity", bins = 30) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+
+```
+
+# try with Predictable package:
+
+```{r}
+
+library(PredictABEL)
+
+
+cGenPredsCat2 <- c(0)
+
+cOutcome <- 30
+cNonGenPred2<-c(34)
+cNonGenPredCat2<-c(35,33)
+cGenPreds<-c(2:28)
+
+# fit logistic regression models
+#riskmodel1 <- fitLogRegModel(data=ExampleData, cOutcome=cOutcome,
+#cNonGenPreds=cNonGenPred1, cNonGenPredsCat=cNonGenPredCat1,
+#cGenPreds=cGenPred1, cGenPredsCat=cGenPredsCat1)
+
+riskmodel2 <- fitLogRegModel(data=new_x, cOutcome=cOutcome,
+cNonGenPreds=cNonGenPred2, cNonGenPredsCat=cNonGenPredCat2,
+cGenPreds=cGenPreds, cGenPredsCat=cGenPredsCat2)
+
+
+riskScore <- riskScore(weights=riskmodel2, data=new_x, 
+cGenPreds=cGenPreds, Type="unweighted")
+
+hist(riskScore)
+
+w_riskScore <- riskScore(weights=riskmodel2, data=new_x, 
+cGenPreds=cGenPreds, Type="weighted")
+
+hist(w_riskScore)
+
+summary(w_riskScore)
+
+summary(riskScore)
+
+new_x$wMRS<-w_riskScore
+new_x$MRS<-riskScore
+
+
+ggplot(new_x, aes(x = wMRS)) +
+  geom_histogram(aes(color = subject_disease_status), fill = "white",
+                position = "identity", bins = 30) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+
+ggplot(new_x, aes(x = MRS)) +
+  geom_histogram(aes(color = subject_disease_status), fill = "white",
+                position = "identity", bins = 30) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+
+```
+
+# calculate the risk to verify:
+
+```{r}
+
+mylogit1 <-glm (factor(new_x$subject_disease_status)~ new_x$wMRS + factor(new_x$Center) + new_x$age_years + factor(new_x$gender), family="binomial")
+summary(mylogit1)
+Model1<-exp(cbind(OR=coef(mylogit1), confint(mylogit1)))
+
+#new_x$wMRS            2.686942e+00  1.622922e+04  2.273205e+19
+#results of the weighted score
+
+mylogit1 <-glm (factor(new_x$subject_disease_status)~ new_x$MRS + factor(new_x$Center) + new_x$age_years + factor(new_x$gender), family="binomial")
+summary(mylogit1)
+Model1<-exp(cbind(OR=coef(mylogit1), confint(mylogit1)))
+Model1
+
+#new_x$MRS              5.250468e+03  2.063972e+00 9.652639e+07
+#results for the unweighted score
+
+```
+
+
+# DOES NOT WORK. Perform the same but using counts rather than relative abundances
+
+```{r}
+
+abund_table<-rarefiedST.metaG
+dim(abund_table)
+str(abund_table)
+
+#Apply proportion normalisation
+x<-t(abund_table)
+
+# now without relative abundance!!
+ 
+#Generate a new table with these species
+new_x<-data.frame(x[,colnames(x) %in% species])
+
+# now we need to select the cases and controls, and add the dietary and metadata information
+
+dim(new_x)
+# rows are subjects
+
+table(metag.imputed$subject_disease_status)
+
+metag<-metag.imputed[,c("sample_alias", "subject_id", "subject_disease_status", "diabcat", "obese", "gender", "age_years", "Center", "cpy1t", "FHPDAC", "probiot", "metformin.ever")]
+
+#metag<-metag.imputed[,c("sample_alias", "subject_id")]
+
+
+# merge the data:
+
+new_x$sample_alias<-rownames(new_x)
+new_x<-merge(new_x, metag, by="sample_alias")
+
+rownames(new_x)<-new_x$subject_id
+
+
+# recode again casecontrol status:
+
+
+table(new_x$subject_disease_status)
+
+str(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-as.numeric(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-factor(new_x$subject_disease_status,
+                                     levels=c(1,2,3),
+                                     labels = c("cancer", "control", "pancreatitis"))
+
+
+new_x<-new_x[new_x$subject_disease_status!="pancreatitis",]
+
+library(car)
+
+new_x$subject_disease_status<-recode(new_x$subject_disease_status, "1=1; 2=0")
+
+table(new_x$subject_disease_status)
+
+str(new_x$subject_disease_status)
+
+
+new_x$subject_disease_status<-ifelse(new_x$subject_disease_status=="control",0, 1)
+
+table(new_x$subject_disease_status)
+
+new_x$subject_disease_status<-as.factor(new_x$subject_disease_status)
+
+
+
+```
+
+
+
+
+
+## Another way: THIS HAS TO BE TAKEN AS THE FINAL ONE
+
+```{r}
+
+library(MASS)
+
+#A multivariate regression model is fitted with all the SNPs to further
+#select those that best predict the casecontrol status. An automatic
+#variable selection, based on Akaike information criteria (AIC), can be
+#applied to the model using the stepAIC() function from library MASS. Note
+#that the function does not support missing values and requires having
+#complete cases (i.e. no missing values on genotypes).
+
+
+dd.end <- data.frame(caco=new_x$subject_disease_status, sp.a)
+head(dd.end)
+
+mod <- stepAIC(glm(caco ~ ., dd.end,
+family="binomial"),
+method="forward", trace=0)
+
+summary(mod)
+
+snps.score <- names(coef(mod))[-1]
+snps.score
+
+
+library(PredictABEL)
+
+pos <- which(names(dd.end)%in%snps.score)
+names(dd.end)
+
+pos
+
+# get the unweighted score (the weighted accounts for estimates)
+score <- riskScore(mod, data=dd.end, 
+                      cGenPreds=pos,
+                      Type="unweighted")
+table(score)
+
+hist(score)
+
+# Now, we test its association with casecontrol status using a logistic model
+
+mod.lin <- glm(caco~score, dd.end,
+               family="binomial")
+mod.lin
+summary(mod.lin)
+
+exp(coef(mod.lin)[2])
+
+predrisk <- predRisk(mod.lin, dd.end)
+
+plotROC(data=dd.end, cOutcome=1,
+        predrisk = predrisk)
+
+
+# get the weighted score (the weighted accounts for estimates)
+wt.score <- riskScore(mod, data=dd.end, 
+                      cGenPreds=pos,
+                      Type="weighted")
+table(wt.score)
+
+hist(wt.score)
+
+
+mod.lin <- glm(caco~wt.score, dd.end,
+               family="binomial")
+mod.lin
+summary(mod.lin)
+
+exp(coef(mod.lin)[2])
+
+predrisk <- predRisk(mod.lin, dd.end)
+
+plotROC(data=dd.end, cOutcome=1,
+        predrisk = predrisk)
+
+new_x$score<-score
+new_x$wt.score<-wt.score
+
+
+ggplot(new_x, aes(x = score)) +
+  geom_histogram(aes(color = subject_disease_status), fill = "white",
+                position = "identity", bins = 30) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+
+ggplot(new_x, aes(x = wt.score)) +
+  geom_histogram(aes(color = subject_disease_status), fill = "white",
+                position = "identity", bins = 30) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+
+#save the data with the scores:
+
+write.csv(new_x, "C:/Ordenador_German/MASTER_OMICS/TFM/microbiomeScore.csv")
+
+```
+
+
+
+#####################################################################
+############################  NO ####################################
+#####################################################################
+
+# REtry with Predictable package now on the counts:
+
+```{r, message=FALSE, warning=FALSE}
+
+library(PredictABEL)
+
+
+cGenPredsCat2 <- c(0)
+
+cOutcome <- 30
+cNonGenPred2<-c(34)
+cNonGenPredCat2<-c(33,35)
+cGenPreds<-c(2:28)
+
+# fit logistic regression models
+#riskmodel1 <- fitLogRegModel(data=ExampleData, cOutcome=cOutcome,
+#cNonGenPreds=cNonGenPred1, cNonGenPredsCat=cNonGenPredCat1,
+#cGenPreds=cGenPred1, cGenPredsCat=cGenPredsCat1)
+
+riskmodel2 <- fitLogRegModel(data=new_x, cOutcome=cOutcome,
+cNonGenPreds=cNonGenPred2, cNonGenPredsCat=cNonGenPredCat2,
+cGenPreds=cGenPreds, cGenPredsCat=cGenPredsCat2)
+
+
+riskScore <- riskScore(weights=riskmodel2, data=new_x, 
+cGenPreds=cGenPreds, Type="unweighted")
+
+hist(riskScore)
+
+w_riskScore <- riskScore(weights=riskmodel2, data=new_x, 
+cGenPreds=cGenPreds, Type="weighted")
+
+hist(w_riskScore)
+
+summary(w_riskScore)
+
+summary(riskScore)
+
+#new_x$wMRS2<-w_riskScore
+#new_x$MRS2<-riskScore
+
+
+```
+
+
+

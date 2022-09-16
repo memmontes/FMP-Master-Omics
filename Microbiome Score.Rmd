@@ -1,0 +1,369 @@
+---
+title: "TFM metagenomic score"
+author: "Esther Molina"
+date: '2022-08-02'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Load the metaG data
+
+```{r}
+
+rarefiedOR.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedORMetaG.csv")
+rarefiedST.metaG<-read.csv("C:/Ordenador_German/MASTER_OMICS/TFM/Lasta MetaG data/RarefiedSTMetaG.csv")
+
+```
+
+# load the 16s data
+
+
+## START WITH ASV DATA:
+
+```{r}
+
+# the metadata:
+
+load(file="C:/CNIO_14102019/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="C:/CNIO_14102019/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+# the beta-diversity measures:
+
+
+# beta-diversity measures
+
+load("C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_Eligible.RData")
+beta.div.ASV<-beta.div
+load("C:/CNIO_14102019/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_Eligible.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+```
+
+
+# get the matrix:
+
+```{r}
+
+names(beta.div.ASV)
+#"Bray_Curtis" "Bray_Curtis.sqrt" "Jaccard_w" "TINA_uw" "TINA_w"          
+names(beta.div.OPEN)
+
+# and for the number of samples:
+dim(beta.div.ASV[[2]])
+# 573 x 573
+dim(beta.div.OPEN[[2]])
+# 580 x 580
+
+# now convert to distance matrix the matrix data file that we obtained:
+dist.betadiv.ASV<-lapply(beta.div.ASV, as.dist)
+dist.betadiv.OPEN<-lapply(beta.div.OPEN, as.dist)
+
+# here we have in a list the 5 beta-diversity indexes calculated 
+# save this as a R data: ALREADY SAVED
+
+#save(dist.betadiv.ASV, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Distances/30112018_16sCalculatedBetasASVEligible.Rdata")
+#save(dist.betadiv.OPEN, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/Distances/30112018_16sCalculatedBetasOPENEligible.Rdata")
+
+```
+
+
+
+```{r check the data structure cars}
+
+# check that the data is OK in terms of rownames
+
+#rownames(beta.div.ASV[["TINA_uw"]])
+#rownames(beta.div.OPEN[["TINA_uw"]])
+#rownames(beta.div.ASV[["TINA_w"]])
+#rownames(beta.div.OPEN[["TINA_w"]])
+#rownames(beta.div.ASV[["Bray_Curtis"]])
+#rownames(beta.div.OPEN[["Bray_Curtis"]])
+
+# check the data structure to have it ordered; here check rownames as well
+head(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+head(as.matrix(dist.betadiv.ASV[["TINA_w"]]))
+head(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]]))
+
+head(as.matrix(dist.betadiv.OPEN[["TINA_uw"]]))
+head(as.matrix(dist.betadiv.OPEN[["TINA_w"]]))
+head(as.matrix(dist.betadiv.OPEN[["Bray_Curtis"]]))
+
+# need to order betadiv colnames with div.data.asv ASV
+rownames(div.data.asv)<-as.character(div.data.asv$sample.name)
+div.data.asv <- div.data.asv[rownames(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]])), ]
+
+# now make sure that all distance matrixes have the same order:
+identical(rownames(as.matrix(dist.betadiv.ASV[["Bray_Curtis"]])), rownames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))) # THIS IS TRUE
+rownames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+colnames(as.matrix(dist.betadiv.ASV[["TINA_uw"]]))
+
+
+```
+
+
+# selec bray curtis:
+
+```{r}
+
+Bray <- dist.betadiv.ASV[["Bray_Curtis"]]
+Bray.saliva <- as.dist(as.matrix(Bray)[div.data.asv$site == "oral cavity", div.data.asv$site == "oral cavity"])
+Bray.stool <- as.dist(as.matrix(Bray)[div.data.asv$site =="stool", div.data.asv$site =="stool"])
+
+
+library(car)
+
+# add first the disease status variable:
+div.data.asv$Disease.status <- recode(div.data.asv$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+data.sample <- div.data.asv
+
+
+##choose right data set according to sites:
+
+data.sample_ST<-subset(data.sample, data.sample$site=="stool") # metadata for oral samples
+data.sample_OR<-subset(data.sample, data.sample$site=="oral cavity") # metadata for stool samples
+
+
+data.sample_OR <- data.sample[rownames(as.matrix(Bray.saliva)), ] # order oral metadata the same as beta-distance matrix; there are 455 saliva samples
+
+data.sample_ST <- data.sample[rownames(as.matrix(Bray.stool)), ] # order stool metadata the same as beta-distance matrix; there are 118 stool samples
+
+# check again that this everything was well ordered
+identical(rownames(as.matrix(Bray.saliva)), as.character(data.sample_OR$sample.name))
+
+
+```
+
+
+## Plots: hierarchical clustering
+
+```{r}
+
+# Food groups to be used for clustering
+
+#myvars$gra_sgmilkyogurt<-myvars$gra8200+myvars$gra8100+myvars$gra8600+myvars$gra8500+myvars$gra9400
+#myvars$gra_sgcheesse<-myvars$gra8800+myvars$gra9000
+#myvars$gra_sgdairydessert<-myvars$gra9200
+
+#myvars$gra_sgwhitemeat<-myvars$gra_chi_tot+myvars$gra1200
+#myvars$gra_sgredmeat<-myvars$gra_vea_tot+myvars$gra_por_tot+myvars$gra_lam_tot
+#myvars$gra_sgorganmeat<-myvars$gra1300+myvars$gra1400
+#myvars$gra_sgcuredmeat<-myvars$gra2100+myvars$gra2200+myvars$gra2300
+#myvars$gra_sgprocessedmeat<-myvars$gra600+myvars$gra700+myvars$gra2500
+
+#myvars$gra_sgfish<-myvars$gra_wfish_tot+myvars$gra_bfish_tot
+#myvars$gra_sgothersea<-myvars$gra3200+myvars$gra3100+myvars$gra1800
+
+#myvars$gra_gallready<-myvars$gra2700+myvars$gra2800+myvars$gra_c_2900+myvars$gra13500
+
+#myvars$gra_sg1leafyveg<-myvars$gra3500+myvars$gra3400
+#myvars$gra_sg1starchveg<-myvars$gra4200+myvars$gra10300+myvars$gra10200
+#myvars$gra_sg1sgfruitingveg<-myvars$gra3600+myvars$gra3800+myvars$gra3700+myvars$gra4700+myvars$gra5200+myvars$gra4100+myvars$gra11630
+#myvars$gra_sg1sggrainsveg<-myvars$gra4300+myvars$gra5000+myvars$gra5100
+#myvars$gra_sg2redyellveg<-myvars$gra3600+myvars$gra4200+myvars$gra5100
+#myvars$gra_sg2greenveg<-myvars$gra3500+myvars$gra3400+myvars$gra3800+myvars$gra4300+myvars$gra5000+myvars$gra3700+myvars$gra4700+myvars$gra5200
+#myvars$gra_sg2whiteveg<-myvars$gra3800+myvars$gra11630+myvars$gra4500+myvars$gra4100
+
+#myvars$gra_gleg<-myvars$gra5810 ##only one
+
+#myvars$gra_gallfru<-myvars$gra6200+myvars$gra6300+myvars$gra6400+myvars$gra6500+myvars$gra7000+myvars$gra7200+myvars$gra6600+myvars$gra7300+myvars$gra6700+myvars$gra7600
+
+#myvars$gra_golives<-myvars$gra7800
+
+#myvars$gra_gnuts<-myvars$gra7900
+
+#myvars$gra_sgbread<-myvars$gra9600+myvars$gra9700
+#myvars$gra_sgricepasta<-myvars$gra10400+myvars$gra10500
+#myvars$gra_gallfats<-myvars$gra11700+myvars$gra11800+myvars$gra11300
+
+#myvars$gra_gflour<-myvars$gra12200+myvars$gra12500
+
+#myvars$gra_gchoc<-myvars$gra12900
+
+#myvars$gra_gsugar<-myvars$gra13100+myvars$gra13200
+
+#myvars$gra_gsauces<-myvars$gra11400+myvars$gra11610
+
+#myvars$gra_sgsugbev<-myvars$gra14300+myvars$gra14500+myvars$gra14700
+#myvars$gra_sgsoftdr<-myvars$gra14300+myvars$gra14400
+#myvars$gra_sgjuice<-myvars$gra14500+myvars$gra14700
+
+# 32 food groups, plus tea, coffee, wine, bear, sprits an fortified
+
+# load the data and retain these variables only (the scores are not to be used here)
+
+Foods<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/PanGen/QES/Data/Secciones trabajadas/Section Diet/MICROBIOME_PANGEN/FoodGrams/20072022_FoodGramsPM_complete.csv")
+
+Foods.GR<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/PanGen/QES/Data/Secciones trabajadas/Section Diet/MICROBIOME_PANGEN/FoodGrams/20072022_FoodGramsPM(GROUPS).csv")
+
+identical(Foods$subject, Foods.GR$subject)
+
+Foods.GR$gra_coffee<-Foods$gra_coffee
+Foods.GR$gra_decoffee<-Foods$gra_decoffee
+Foods.GR$gra_tea<-Foods$gra_tea
+Foods.GR$wine2<-Foods$wine2
+Foods.GR$beer2<-Foods$beer2
+Foods.GR$spirits2<-Foods$spirits2
+Foods.GR$fortified2<-Foods$fortified2
+
+# load the metadata:
+
+
+meta<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/PanGen/QES/Data/Microbiome_metadata/NEW UPDATE ALL VARIABLES/14052018_metadata_AllMicrobiome.csv", header=TRUE, sep=";")
+metaPM<-read.csv("Z:/Genetic_and_Molecular_Epidemiology/Backup/Esther Molina/EMBL_STAY/Imputation/ImputationOnAllData/01062018_imputeddataNew.csv", header=TRUE, sep=";") # ONLY FOR THE SPANISH DATA
+
+sc<-Foods.GR[,c(2,3,87:128)]
+
+sc$gra_sgcuredprocessedmeat<-NULL
+
+sc$gra_gallmeat<-NULL
+sc$gra_gallveg<-NULL
+#sc$gra_gallfru<-NULL
+sc$gra_gallcer<-NULL
+sc$gra_gnonalc<-NULL
+sc$gra_gallsea<-NULL
+sc$gra_meatseafood<-NULL
+
+sc$gra_decoffee<-ifelse(is.na(sc$gra_decoffee), 0, sc$gra_decoffee)
+sc$gra_coffee2<-sc$gra_coffee+sc$gra_decoffee
+sc$gra_coffee<-NULL
+sc$gra_decoffee<-NULL
+
+meta<-merge(metaPM, sc, by="subject")
+
+
+table(meta$final_eligibility)
+
+meta<-meta[meta$casecontrol!=2,]
+#meta<-meta[meta$final_eligibility!="NON ELIGIBLE",]
+
+# remove individuals without dietary information:
+
+meta<-meta[meta$subject!="3109131",]
+meta<-meta[meta$subject!="3109136",]
+meta<-meta[meta$subject!="3109140",]
+meta<-meta[meta$subject!="3109231",]
+
+# remove non-eligible subjects
+
+meta<-meta[meta$subject!="3103101",]
+meta<-meta[meta$subject!="3103105",]
+meta<-meta[meta$subject!="3103122",]
+meta<-meta[meta$subject!="3103123",]
+
+
+
+```
+
+
+# HIERARCHICAL CLUSTERING
+
+# First approach: cluster all ldietary variables. We will explore two or three clusters, as well different distance measures. Results will be shown by disease status mainly.
+
+# define colors for all clusters:
+
+```{r}
+
+# define colors:
+paletteLength <- 50
+myBreaks <- c(seq(-3, 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(3/paletteLength, 3, length.out=floor(paletteLength/2)))
+myColor <- colorRampPalette(c("darkgreen", "grey90", "darkred")) (paletteLength)
+
+#myColor <- colorRampPalette(c("white", "red", "green", "black")) (paletteLength)
+
+data<-meta[,c(45:78)]
+
+data<-as.data.frame(t(data))
+
+data<-as.matrix(data)
+
+
+library(pheatmap)
+library(compareGroups)
+library(sjlabelled)
+library(ggplot2)
+library(ggpubr)
+library(magrittr)
+library(gridExtra)
+library(foreign)
+library(RColorBrewer)
+library(reshape)
+library(cluster)
+library(NbClust)
+
+
+## to confirm that the values were scaled!!
+cal_z_score <- function(x){
+  (x - mean(x)) / sd(x)
+}
+ 
+data_subset_norm <- t(apply(data, 1, cal_z_score))
+pheatmap(data_subset_norm)
+
+is.na(data) %>% table()
+is.infinite(data) %>% table()
+
+# first age group:
+##################
+# 3 clusters
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 3, cutree_cols = 1, angle_col = "90", main="Food groups, 2 clusters, all, Euclidean")
+out11_3cl
+
+out11_3cl<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_rows = T, cluster_cols=T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", clustering_distance_cols = "manhattan", cex=1, clustering_method = "ward.D", border_color = T, cutree_rows = 2, cutree_cols = 1, angle_col = "90", main="Food groups, 3 clusters, all, Manhattan")
+out11_3cl
+
+
+## Manhattan looks more reasonable
+
+## annotate cases and diabetics
+
+metadata_cl<-meta[,c("casecontrol", "diabcat", "obese")]
+
+str(metadata_cl)
+
+metadata_cl$casecontrol <- factor(metadata_cl$casecontrol,
+levels = c(0,1),
+labels = c("controls", "cases"))
+
+metadata_cl$diabcat <- factor(metadata_cl$diabcat,
+levels = c(0,1,2),
+labels = c("non-diabetes", "NOD", "LSD"))
+
+metadata_cl$obese <- factor(metadata_cl$obese,
+levels = c(0,1),
+labels = c("non-obese", "obese"))
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "euclidean", cex=1, clustering_distance_cols = "euclidean", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange4"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="3 clusters, sep, Euclidean")
+out11_3clSS
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "manhattan", cex=1, clustering_distance_cols = "manhattan", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange4"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="3 clusters, sep, manhattan")
+out11_3clSS
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "correlation", cex=1, clustering_distance_cols = "correlation", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange4"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="3 clusters, sep, pearson")
+out11_3clSS
+
+out11_3clSS<-pheatmap(data, color = myColor, show_rownames = T, show_colnames = F, cluster_cols = T,  cluster_rows = T, scale="row", breaks=myBreaks, cex=1, clustering_distance_rows = "minkowski", cex=1, clustering_distance_cols = "minkowski", clustering_method = "ward.D", border_color = T, annotation_col = metadata_cl, annotation_colors=list(casecontrol=c("controls"="limegreen", "cases"="orange4"), obese=c("non-obese"="powderblue", "obese"="plum"), diabcat=c("non-diabetes"="slateblue", "NOD"="royalblue1", "LSD"="violet")), cutree_rows = 2, cutree_col=2, angle_col = "90", main="3 clusters, sep, minkowski")
+out11_3clSS
+
+```
+
+
