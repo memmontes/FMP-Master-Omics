@@ -1,0 +1,1094 @@
+---
+title: "Plots for alpha diversity and ANOVA tests"
+author: "Esther Molina"
+date: "27 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## set the environment:
+
+```{r}
+
+library("phyloseq", warn.conflicts=F, quietly=T)
+library("ggplot2", warn.conflicts=F, quietly=T)
+library("gridExtra", warn.conflicts=F, quietly=T)
+library("permute", warn.conflicts=F, quietly=T)
+library("lattice", warn.conflicts=F, quietly=T)
+library("vegan", warn.conflicts=F, quietly=T)
+library("compareGroups", warn.conflicts=F, quietly=T)
+library("RColorBrewer")
+library("reshape2")
+library("plyr")
+
+library(gplots, quietly=T)
+library(ape, quietly=T)
+library(grid, quietly=T)
+library("ape")
+library(cluster)
+library(car, quietly=T)
+library(Matrix, quietly=T)
+library(ggpubr)
+
+#install.packages('utf8') in case you get an error with utf8 format
+```
+
+# load the data
+
+```{r}
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+# load the otudata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+```
+
+
+## Alpha Diversity Plots combined
+
+```{r alphadiversity plots}
+
+## ASV data
+# subset by data to diversity indexes and data by site
+names(div.data.asv)
+HILL<-div.data.asv[,c("site", "status", "q.0", "q.1", "q.2")]
+HILL_ST<-subset(HILL, HILL$site=="stool")
+HILL_OR<-subset(HILL, HILL$site=="oral cavity")
+
+colnames(HILL_ST) = c("site","status", "Richness","exp(Shanon)","inv(Simpson)")
+colnames(HILL_OR) = c("site", "status", "Richness","exp(Shanon)","inv(Simpson)")
+plot_ST= melt(HILL_ST)
+plot_OR= melt(HILL_OR)
+
+#plotting
+pST <- ggplot(data = plot_ST, aes(x=variable, y=value))
+pST <- pST + geom_boxplot(aes(fill = status)) +
+         geom_point(aes(y=value, group=status), position = position_dodge(width=0.75)) +
+         facet_wrap( ~ variable, scales="free_x") +
+         xlab("") + ylab("alpha diversity measure") + ggtitle("Alpha Diversity Pattern in Stool Samples")+
+         theme(plot.title = element_text(size = 15, face = "bold"))
+pOR <- ggplot(data = plot_OR, aes(x=variable, y=value))
+pOR <- pOR + geom_boxplot(aes(fill = status)) +
+         geom_point(aes(y=value, group=status), position = position_dodge(width=0.75)) +
+         facet_wrap( ~ variable, scales="free_x") +
+         xlab("") + ylab("alpha diversity measure") + ggtitle("Alpha Diversity Pattern in Oral Samples")+
+        theme(plot.title = element_text(size = 15, face = "bold"))
+
+ggsave(pST, filename="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Alpha Diversity Pattern in Stool Samples_ASVEligible.pdf", width = 10, height=10)
+ggsave(pST, filename="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Alpha Diversity Pattern in Stool Samples_ASVEligible.png", width = 10, height=10)
+ggsave(pOR, filename="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Alpha Diversity Pattern in Oral Samples_ASVEligible.pdf", width = 10, height=10)
+ggsave(pOR, filename="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Alpha Diversity Pattern in Oral Samples_ASVEligible.png", width = 10, height=10)
+
+
+## OPEN OTU data
+
+names(div.data.otu)
+HILL<-div.data.otu[,c("site", "status", "q.0", "q.1", "q.2")]
+HILL_ST<-subset(HILL, HILL$site=="stool")
+HILL_OR<-subset(HILL, HILL$site=="oral cavity")
+
+colnames(HILL_ST) = c("site","status", "Richness","exp(Shanon)","inv(Simpson)")
+colnames(HILL_OR) = c("site", "status", "Richness","exp(Shanon)","inv(Simpson)")
+plot_ST= melt(HILL_ST)
+plot_OR= melt(HILL_OR)
+
+#plotting
+pST <- ggplot(data = plot_ST, aes(x=variable, y=value))
+pST <- pST + geom_boxplot(aes(fill = status)) +
+         geom_point(aes(y=value, group=status), position = position_dodge(width=0.75)) +
+         facet_wrap( ~ variable, scales="free_x") +
+         xlab("") + ylab("alpha diversity measure") + ggtitle("Alpha Diversity Pattern in Stool Samples")+
+         theme(plot.title = element_text(size = 15, face = "bold"))
+pOR <- ggplot(data = plot_OR, aes(x=variable, y=value))
+pOR <- pOR + geom_boxplot(aes(fill = status)) +
+         geom_point(aes(y=value, group=status), position = position_dodge(width=0.75)) +
+         facet_wrap( ~ variable, scales="free_x") +
+         xlab("") + ylab("alpha diversity measure") + ggtitle("Alpha Diversity Pattern in Oral Samples")+
+        theme(plot.title = element_text(size = 15, face = "bold"))
+
+ggsave(pST, filename="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Alpha Diversity Pattern in Stool Samples_OTUEligible.pdf", width = 10, height=10)
+ggsave(pST, filename="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Alpha Diversity Pattern in Stool Samples_OTUEligible.png", width = 10, height=10)
+ggsave(pOR, filename="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Alpha Diversity Pattern in Oral Samples_OTUEligible.pdf", width = 10, height=10)
+ggsave(pOR, filename="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Alpha Diversity Pattern in Oral Samples_OTUEligible.png", width = 10, height=10)
+
+```
+
+# create the phyloseq object:
+
+
+```{r phyloseq object}
+
+
+#######################
+## start with ASV data
+#######################
+
+t.asv<-as.data.frame(t(t.asv.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.ASV[otu.data.ASV$ASV_name %in% rownames(t.asv) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$ASV_name
+
+otdata<-otdata[rownames(t.asv),]
+
+# to check:
+identical(rownames(otdata), rownames(t.asv)) # TRUE
+
+# put everyting as matrix
+
+class(t.asv) # matrix
+
+ot<-as.matrix(t.asv) # rename
+
+otdata = as.matrix(otdata)
+
+class(otdata)
+
+
+dim(otdata)
+dim(ot)
+
+
+# put all otu_table variables as numeric
+#ot = data.matrix(otu_table, rownames.force = NA)
+
+# Now tell phyloseq to combine them into a phyloseq object.
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+#aa is otu_table reshared
+
+aa<-as.data.frame(t(t.asv))
+
+identical(rownames(div.data.asv), rownames(aa))
+# is FALSE, so reorder!
+
+rownames(div.data.asv)<-div.data.asv$sample.name
+
+data.sample <- div.data.asv[rownames(aa), ]
+
+identical(rownames(data.sample), rownames(aa)) # this is now true
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(data.sample)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+physeq
+
+#phyloseq-class experiment-level object
+#otu_table()   OTU Table:         [ 3393 taxa and 573 samples ]
+#sample_data() Sample Data:       [ 573 samples by 54 sample variables ]
+#tax_table()   Taxonomy Table:    [ 3393 taxa by 10 taxonomic ranks ]
+
+
+#######################
+## the same with OPEN data
+#######################
+
+
+t.otu<-as.data.frame(t(t.otu.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.OPEN[otu.data.OPEN$OTU_name %in% rownames(t.otu) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$OTU_name
+
+otdata<-otdata[rownames(t.otu),]
+
+# to check:
+identical(rownames(otdata), rownames(t.otu)) # TRUE
+
+# put everyting as matrix
+
+class(t.otu) # matrix
+
+ot<-t.otu # rename
+
+otdata = as.matrix(otdata)
+
+class(otdata)
+
+ot<-as.matrix(ot)
+
+dim(otdata)
+dim(ot)
+
+
+# put all otu_table variables as numeric
+#ot = data.matrix(otu_table, rownames.force = NA)
+
+# Now tell phyloseq to combine them into a phyloseq object.
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+#aa is otu_table reshared
+
+# verify sample match to add metadata to the phyloseq object
+#aa is otu_table reshared
+
+aa<-as.data.frame(t(t.otu))
+
+identical(rownames(div.data.otu), rownames(aa))
+# is FALSE, so reorder!
+
+rownames(div.data.otu)<-div.data.otu$sample.name
+
+data.sample <- div.data.otu[rownames(aa), ]
+
+
+identical(rownames(data.sample), rownames(aa)) # this is now true
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(data.sample)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+physeq
+
+```
+
+
+# get some statitiscs from the phyloseq object:
+
+```{r}
+ntaxa(physeq) # get the number of taxa: 3393 for ASV ans 853 for OPEN
+# this retrieves the number of species with known reference data
+
+min(sample_sums(physeq))
+mean(sample_sums(physeq))
+max(sample_sums(physeq))
+
+# for the ASV data:
+#> ntaxa(physeq) # get the number of taxa: 3393 for ASV ans 853 for OPEN
+#[1] 3393
+#> min(sample_sums(physeq))
+#[1] 423
+#> mean(sample_sums(physeq))
+#[1] 11416.44
+#> max(sample_sums(physeq))
+#[1] 101141
+
+# for the OPEN DATA:
+# ntaxa(physeq) # get the number of taxa: 3393 for ASV
+#[1] 852
+# min(sample_sums(physeq))
+#[1] 401
+# mean(sample_sums(physeq))
+#[1] 13122.25
+# max(sample_sums(physeq))
+#[1] 130365
+
+get_taxa_unique(physeq, "phylum")
+## ASV
+# [1] "Firmicutes"         "Spirochaetes"       "Proteobacteria"     "Cyanobacteria"     
+# [5] "Verrucomicrobia"    "Tenericutes"        "Bacteroidetes"      NA                  
+# [9] "PHY_Coriobacteriia" "Synergistetes"      "Actinobacteria"     "Fusobacteria" 
+
+## OPEN:
+# [1] "Bacteroidetes"   "Firmicutes"      "Cyanobacteria"   "Actinobacteria" 
+# [5] "Fusobacteria"    "Proteobacteria"  NA                "Synergistetes"  
+# [9] "Spirochaetes"    "Verrucomicrobia" "Tenericutes"     "Lentisphaerae"  
+# [13] "Chloroflexi"   
+
+get_taxa_unique(physeq, "genus")
+
+## ASV 
+# [1] "Veillonella"           NA                      "Treponema"            
+# [4] "Rubidibacter"          "Moraxella"             "Akkermansia"          
+# [7] "Mycoplasma"            "Paraprevotella"        "Coprobacter"          
+#[10] "Prevotella"            "Alloprevotella"        "Alistipes"            
+#[13] "Porphyromonas"         "Bacteroides"           "Barnesiella"          
+#[16] "Capnocytophaga"        "Phocaeicola"           "Odoribacter"          
+#[19] "Tannerella"            "Parabacteroides"       "Eubacterium"          
+#[22] "Succinivibrio"         "Desulfovibrio"         "Campylobacter"        
+#[25] "Cardiobacterium"       "Haemophilus"           "Desulfobulbus"        
+#[28] "Butyricimonas"         "Megamonas"             "Butyricicoccus"       
+#[31] "Clostridium"           "Ruminococcus"          "Eggerthella"          
+#[34] "Pyramidobacter"        "Bifidobacterium"       "Actinomyces"          
+#[37] "Rothia"                "Mobiluncus"            "Pseudoramibacter"     
+#[40] "Filifactor"            "Anaerostipes"          "Mogibacterium"        
+#[43] "Atopobium"             "Lachnoanaerobaculum"   "Stomatobaculum"       
+#[46] "Catonella"             "Oribacterium"          "Coprococcus"          
+#[49] "Slackia"               "Collinsella"           "Fretibacterium"       
+#[52] "Terrisporobacter"      "Peptostreptococcus"    "Neisseria"            
+#[55] "Sutterella"            "Alloscardovia"         "Corynebacterium"      
+#[58] "Parascardovia"         "Scardovia"             "Kingella"             
+#[61] "Parasutterella"        "Streptococcus"         "Staphylococcus"       
+#[64] "Flavonifractor"        "Lactobacillus"         "Anaeroglobus"         
+#[67] "Acidaminococcus"       "Dialister"             "Gemella"              
+#[70] "Megasphaera"           "Oscillibacter"         "Granulicatella"       
+#[73] "Enterococcus"          "Turicibacter"          "Solobacterium"        
+#[76] "Selenomonas"           "Phascolarctobacterium" "Abiotrophia"          
+#[79] "Shuttleworthia"        "Howardella"            "Parvimonas"           
+#[82] "Roseburia"             "Fusobacterium"         "Leptotrichia"         
+#[85] "Propionibacterium"     
+
+## OPEN
+#  [1] "Porphyromonas"         "Lactobacillus"         "Rubidibacter"         
+#  [4] "Atopobium"             "Leptotrichia"          "Gardnerella"          
+#  [7] NA                      "Bifidobacterium"       "Haemophilus"          
+# [10] "Aggregatibacter"       "Scardovia"             "Parascardovia"        
+# [13] "Clostridium"           "Oribacterium"          "Eubacterium"          
+# [16] "Jonquetella"           "Slackia"               "Anaerococcus"         
+# [19] "Treponema"             "Alloprevotella"        "Johnsonella"          
+# [22] "Prevotella"            "Alistipes"             "Megamonas"            
+# [25] "Solobacterium"         "Capnocytophaga"        "Paraprevotella"       
+# [28] "Actinomyces"           "Parabacteroides"       "Mogibacterium"        
+# [31] "Megasphaera"           "Oscillibacter"         "Dialister"            
+# [34] "Phascolarctobacterium" "Sutterella"            "Succinivibrio"        
+# [37] "Ruminococcus"          "Ochrobactrum"          "Bacteroides"          
+# [40] "Coprococcus"           "Flavonifractor"        "Collinsella"          
+# [43] "Howardella"            "Anaerostipes"          "Butyricicoccus"       
+# [46] "Catenibacterium"       "Akkermansia"           "Streptococcus"        
+# [49] "Brevundimonas"         "Propionibacterium"     "Neisseria"            
+# [52] "Delftia"               "Gordonibacter"         "Weissella"            
+# [55] "Selenomonas"           "Campylobacter"         "Desulfovibrio"        
+# [58] "Blautia"               "Coprobacter"           "Barnesiella"          
+# [61] "Allisonella"           "Acidaminococcus"       "Parvimonas"           
+# [64] "Eggerthella"           "Eggerthia"             "Odoribacter"          
+# [67] "Butyricimonas"         "Rothia"                "Peptostreptococcus"   
+# [70] "Stomatobaculum"        "Mycoplasma"            "Tannerella"           
+# [73] "Cardiobacterium"       "Fretibacterium"        "Lachnoanaerobaculum"  
+# [76] "Moryella"              "Fusobacterium"         "Finegoldia"           
+# [79] "Catonella"             "Alloscardovia"         "Veillonella"          
+# [82] "Corynebacterium"       "Sneathia"              "Anaeroglobus"         
+# [85] "Coprobacillus"         "Pyramidobacter"        "Olsenella"            
+# [88] "Mitsuokella"           "Anaerotruncus"         "Shuttleworthia"       
+# [91] "Abiotrophia"           "Gemella"               "Streptobacillus"      
+# [94] "Phocaeicola"           "Moraxella"             "Kingella"             
+# [97] "Pseudoramibacter"      "Turicibacter"          "Roseburia"            
+#[100] "Parasutterella"        "Victivallis"           "Acinetobacter"        
+#[103] "Granulicatella"        "Enterococcus"          "Pseudomonas"          
+#[106] "Mobiluncus"            "Filifactor"            "Staphylococcus"       
+#[109] "Desulfomicrobium"      "Achromobacter"        
+
+aa<-get_taxa_unique(physeq, "species") 
+# only 121 species are unique in ASV
+# only 151 species are unique in OPEN
+
+# filter taxa #############################################
+
+
+# prune OTUs to the most prevalent ones
+# first transform the data to the relative abundance
+
+physeq1  = transform_sample_counts(physeq, function(x) x / sum(x) )
+physeq2<-transform_sample_counts(physeq, function(OTU) OTU/sum(OTU) ) # this is exactly the same as before
+ntaxa(physeq1)
+
+
+#Remove taxa not seen more than 3 times in at least 20% of the samples. This protects against an OTU with small mean & trivially large C.V.
+#GP = filter_taxa(physeq1, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+#ntaxa(GP)
+#print(GP)
+
+#sample_sums(GP)
+#ntaxa(GlobalPatterns)
+
+# Apply rarefaction with rarefy_even_depth:
+# this downsamples all samples to the same depth and prunes otus that disappear from all samples as a result:
+#physeq3 <- rarefy_even_depth(physeq, rngseed = 1121983)
+#sample_sums(physeq3)[1:5]
+
+# extract the 500 most abundand taxa
+physeq4<-prune_taxa(names(sort(taxa_sums(physeq), TRUE)[1:500]), physeq) # the most abundant taxa
+
+physeq5<-prune_taxa(names(sort(taxa_sums(physeq1), TRUE)[1:500]), physeq1) # the most abundant 500 as relative counts
+
+#gp.ch = subset_taxa(physeq4, phylum=="Bacteroidetes")
+#gp.ch = subset_taxa(physeq5, phylum=="Bacteroidetes")
+
+```
+
+
+# With STOOL data:
+
+```{r abundance plots in STOOL, echo=FALSE}
+
+gp <- prune_taxa(
+  names( sort( taxa_sums(physeq), decreasing = T )[ 1:500 ] ),
+  physeq
+)
+
+# sum-normalize
+gp.norm <- transform_sample_counts( gp, function(x) x/sum(x) )
+colSums(otu_table(gp.norm)[, 1:5] ) # all one, so OK
+
+
+#merge
+gp.norm_m <- merge_samples(gp.norm, "site")
+sample_data(gp.norm_m)$site <- factor(sample_names(gp.norm_m))
+
+#gp<-gp.norm_m@sam_data
+
+#taxa merge
+
+gp.norm_m <- tax_glom(gp.norm_m, "genus")
+
+##Transform to percentage of total available
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+#generate stacked bar plot
+
+plot_bar(gp.norm_m, fill = 'genus') +
+geom_bar( aes(color = genus, fill = genus ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") # here are all the subjects included
+
+################################################################################
+### now make plots by disease status for oral and stool samples separately:
+
+# 1) Restrict to oral cavity, and then to stool:
+
+ST <-subset(data.sample, data.sample$site=="stool") # subset the stool samples
+#rownames(ST) = as.character(ST$MMPCID)
+
+# consider the taxonomy table:
+otdata
+dim(otdata)
+
+# consider the otu_table
+otST<-ot[,colnames(ot) %in% rownames(ST)]
+dim(otST)
+
+class(ot)
+
+class(otdata)
+
+# while here all taxa are included, as we will sample to the 500 most abundant species, we do not need to filter further
+
+# Now tell phyloseq to combine them into a phyloseq object.
+#library("phyloseq")
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+## aa is otu_table reshaped
+
+identical(rownames(ST), colnames(otST))
+# is TRUE, so reordering not needed!
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(ST)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+physeq # 3393 taxa for 123 samples
+
+# 2) plot bars for oral cavity only:
+
+gp <- prune_taxa(
+  names( sort( taxa_sums(physeq), decreasing = T )[ 1:500 ] ),
+  physeq
+) # for the most abundant taxa
+
+# sum-normalize
+gp.norm <- transform_sample_counts( gp, function(x) x/sum(x) )
+colSums(otu_table(gp.norm)[, 1:5] ) # all 1, so OK
+
+
+#merge
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+
+#taxa merge; start with genus
+
+gp.norm_m <- tax_glom(gp.norm_m, "genus") # in case we want to plot by genus; change for family and phylum
+
+##Transform to percentage of total available
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+## ------------------------------- ##
+#generate stacked bar plot
+
+p1<-plot_bar(gp.norm_m, fill = "genus", x="status") +
+geom_bar( aes(color = genus, fill = genus ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By genus (OPEN data)")
+p1
+ggsave(file="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/OPEN_bysitestool_phyloseq.pdf", width=15, height=8, dpi=300)
+ggsave(file="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/OPEN_bysitestool_phyloseq.png", width=15, height=8, dpi=300)
+
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+gp.norm_m <- tax_glom(gp.norm_m, "family") # in case we want to plot by family
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+p2<-plot_bar(gp.norm_m, fill = "family", x="status") +
+geom_bar( aes(color = family, fill = family ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By family (ASV data)")
+p2
+
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+gp.norm_m <- tax_glom(gp.norm_m, "phylum") # in case we want to plot by phylum
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+p3<-plot_bar(gp.norm_m, fill = "phylum", x="status") +
+geom_bar( aes(color = phylum, fill = phylum ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By phylum (ASV data)")
+p3
+
+#grid.arrange(p3, p2, p1, nrow=3)
+
+
+```
+
+
+
+# With SALIVA data:
+
+```{r abundance plots in STOOL, echo=FALSE}
+
+gp <- prune_taxa(
+  names( sort( taxa_sums(physeq), decreasing = T )[ 1:500 ] ),
+  physeq
+)
+
+# sum-normalize
+gp.norm <- transform_sample_counts( gp, function(x) x/sum(x) )
+colSums(otu_table(gp.norm)[, 1:5] ) # all one, so OK
+
+
+#merge
+gp.norm_m <- merge_samples(gp.norm, "site")
+sample_data(gp.norm_m)$site <- factor(sample_names(gp.norm_m))
+
+#gp<-gp.norm_m@sam_data
+
+#taxa merge
+
+gp.norm_m <- tax_glom(gp.norm_m, "genus")
+
+##Transform to percentage of total available
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+#generate stacked bar plot
+
+plot_bar(gp.norm_m, fill = 'genus') +
+geom_bar( aes(color = genus, fill = genus ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") # here are all the subjects included
+
+################################################################################
+### now make plots by disease status for oral and stool samples separately:
+
+# 1) Restrict to oral cavity, and then to stool:
+
+OR <-subset(data.sample, data.sample$site=="oral cavity") # subset the stool samples
+#rownames(OR) = as.character(OR$MMPCID)
+
+# consider the taxonomy table:
+otdata
+dim(otdata)
+
+# consider the otu_table
+otOR<-ot[,colnames(ot) %in% rownames(OR)]
+dim(otOR)
+
+class(ot)
+
+class(otdata)
+
+# while here all taxa are included, as we will sample to the 500 most abundant species, we do not need to filter further
+
+# Now tell phyloseq to combine them into a phyloseq object.
+#library("phyloseq")
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+## aa is otu_table reshaped
+
+identical(rownames(OR), colnames(otOR))
+# is TRUE, so reordering not needed!
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(OR)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+physeq # 3393 taxa for 123 samples
+
+# 2) plot bars for oral cavity only:
+
+gp <- prune_taxa(
+  names( sort( taxa_sums(physeq), decreasing = T )[ 1:500 ] ),
+  physeq
+) # for the most abundant taxa
+
+# sum-normalize
+gp.norm <- transform_sample_counts( gp, function(x) x/sum(x) )
+colSums(otu_table(gp.norm)[, 1:5] ) # all 1, so OK
+
+
+#merge
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+
+#taxa merge; start with genus
+
+gp.norm_m <- tax_glom(gp.norm_m, "genus") # in case we want to plot by genus; change for family and phylum
+
+##Transform to percentage of total available
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+## ------------------------------- ##
+#generate stacked bar plot
+
+p1<-plot_bar(gp.norm_m, fill = "genus", x="status") +
+geom_bar( aes(color = genus, fill = genus ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By genus (OPEN data)")
+p1
+ggsave(file="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/OPEN_bysite_phyloseq.pdf", width=15, height=8, dpi=300)
+ggsave(file="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/OPEN_bysite_phyloseq.png", width=15, height=8, dpi=300)
+
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+gp.norm_m <- tax_glom(gp.norm_m, "family") # in case we want to plot by family
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+p2<-plot_bar(gp.norm_m, fill = "family", x="status") +
+geom_bar( aes(color = family, fill = family ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By family (OPEN data)")
+p2
+
+gp.norm_m <- merge_samples(gp.norm, "status")
+sample_data(gp.norm_m)$status <- factor(sample_names(gp.norm_m))
+gp.norm_m <- tax_glom(gp.norm_m, "phylum") # in case we want to plot by phylum
+gp.norm_m = transform_sample_counts(gp.norm_m, function(x) 100 * x/sum(x))
+
+p3<-plot_bar(gp.norm_m, fill = "phylum", x="status") +
+geom_bar( aes(color = phylum, fill = phylum ), stat = 'identity', position = 'stack') +
+ylab("Relative abundance (% of total sequences)") + ggtitle("By phylum (OPEN data)")
+p3
+
+#grid.arrange(p3, p2, p1, nrow=3)
+
+
+```
+
+
+## Plots for target bacteria based on phyloseq:
+
+# first find the taxa of relevance:
+
+```{r}
+
+# bacterial names of interest in the ASV data
+
+
+# let´s do it on the otu data we keep:
+otu.data.ASV.clean<-otu.data.ASV[otu.data.ASV$ASV_name %in% colnames(t.asv.data),]
+
+grep("Porphyromonas gingivalis", otu.data.ASV.clean$species)
+
+otu.data.ASV.clean[grep("Porphyromonas gingivalis", otu.data.ASV.clean$species),"ASV_name"]
+#ASV_04759 ASV_04764 ASV_04765 ASV_04766 ASV_04767 ASV_04768 ASV_04769 ASV_04770 ASV_16668 ASV_16672 ASV_16673 ASV_16675 ASV_16676 ASV_16678
+otu.data.ASV.clean[grep("Prevotella intermedia", otu.data.ASV.clean$species),"ASV_name"]
+#ASV_01899 ASV_01900 ASV_01902 ASV_01905 ASV_01908 ASV_01910 ASV_01914 ASV_01915 ASV_01916 ASV_01917 ASV_01918 ASV_01920
+#ASV_01921 ASV_01926 ASV_01928 ASV_01929 ASV_15418 ASV_15428 ASV_15430 ASV_15431 ASV_15434 ASV_15435 ASV_15439
+otu.data.ASV.clean[grep("Aggregatibacter actinomycetemcomitans", otu.data.ASV.clean$species), "ASV_name"]
+# 0
+otu.data.ASV.clean[grep("Tannerella forsythia", otu.data.ASV.clean$species), "ASV_name"]
+#ASV_04677 ASV_04681 ASV_04682 ASV_04684 ASV_04685 ASV_04686 ASV_04687 ASV_16634 ASV_16635 ASV_16637 ASV_16638 ASV_16640
+
+#######################
+# for the OPEN data:
+grep("Porphyromonas gingivalis", otu.data.OPEN$species)
+
+otu.data.OPEN[grep("Porphyromonas gingivalis", otu.data.OPEN$species), "OTU_name"] #"B_S26"
+otu.data.OPEN[grep("Prevotella intermedia", otu.data.OPEN$species), "OTU_name"] #"B_S25225"
+otu.data.OPEN[grep("Aggregatibacter actinomycetemcomitans", otu.data.OPEN$species), "OTU_name"] #"B_S408"
+otu.data.OPEN[grep("Tannerella forsythia", otu.data.OPEN$species), "OTU_name"] #"B_S36262"
+
+
+```
+
+# second prepare the data table with taxa for the bacteria:
+## START WITH OPEN DATA:
+
+# 2.1 generate the phyloseq object:
+
+```{r}
+
+#######################
+## OPEN data
+#######################
+
+
+t.otu<-as.data.frame(t(t.otu.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.OPEN[otu.data.OPEN$OTU_name %in% rownames(t.otu) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$OTU_name
+
+otdata<-otdata[rownames(t.otu),]
+
+# to check:
+identical(rownames(otdata), rownames(t.otu)) # TRUE
+
+# put everyting as matrix
+
+class(t.otu) # matrix
+
+ot<-t.otu # rename
+
+otdata = as.matrix(otdata)
+
+class(otdata)
+
+ot<-as.matrix(ot)
+
+dim(otdata)
+dim(ot)
+
+
+# put all otu_table variables as numeric
+#ot = data.matrix(otu_table, rownames.force = NA)
+
+# Now tell phyloseq to combine them into a phyloseq object.
+OTU = otu_table(ot, taxa_are_rows = TRUE)
+TAX = tax_table(otdata)
+OTU
+TAX
+
+# verify sample match to add metadata to the phyloseq object
+#aa is otu_table reshared
+
+# verify sample match to add metadata to the phyloseq object
+#aa is otu_table reshared
+
+aa<-as.data.frame(t(t.otu))
+
+identical(rownames(div.data.otu), rownames(aa))
+# is FALSE, so reorder!
+
+rownames(div.data.otu)<-div.data.otu$sample.name
+
+data.sample <- div.data.otu[rownames(aa), ]
+
+
+identical(rownames(data.sample), rownames(aa)) # this is now true
+
+# use phyloseq function sample_data to add the data 
+
+map1<-sample_data(data.sample)
+
+# and now generate the phyloseq object:
+physeq = phyloseq(OTU, TAX, map1)
+
+
+```
+
+# 2.2 generate the phyloseq objects for the specific bacteria we need:
+
+```{r}
+
+# relative abundance data:
+physeq1  = transform_sample_counts(physeq, function(x) x / sum(x) )
+
+# Extract abundance matrix from the phyloseq object
+OTU1 = as(otu_table(physeq1), "matrix") # physeq1 contains the data in relative abundance.
+# transpose if necessary
+if(taxa_are_rows(physeq1)){OTU1 <- t(OTU1)}
+# Coerce to data.frame
+OTUdf = as.data.frame(OTU1)
+
+# for the P gingivalis set:
+gp.ch = subset_taxa(physeq1, species=="Porphyromonas gingivalis") # take the relative counts obtained before with phyloseq1 object
+ntaxa(gp.ch)
+OTU1.Pg = as(otu_table(gp.ch), "matrix")
+# transpose if necessary
+if(taxa_are_rows(gp.ch)){OTU1.Pg <- t(OTU1.Pg)}
+# Coerce to data.frame
+OTUdf.Pg = as.data.frame(OTU1.Pg)
+
+# add the case-control, method and site variable to OTUdf.Pg
+div.data.otu$Disease.status <- recode(div.data.otu$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+data<-div.data.otu[,c("site", "casecontrol", "method", "Disease.status")]
+OTUdf.Pg<-merge(OTUdf.Pg, data, by="row.names")
+
+
+# for the T. forsythia set:
+gp.ch = subset_taxa(physeq1, species=="Tannerella forsythia") # take the relative counts obtained before with phyloseq1 object
+OTU1.Tf = as(otu_table(gp.ch), "matrix")
+# transpose if necessary
+if(taxa_are_rows(gp.ch)){OTU1.Tf <- t(OTU1.Tf)}
+# Coerce to data.frame
+OTUdf.Tf = as.data.frame(OTU1.Tf)
+
+# add the case-control, method and site variable to OTUdf.Pg
+OTUdf.Tf<-merge(OTUdf.Tf, data, by="row.names")
+
+
+# for the P. intermedia set:
+gp.ch = subset_taxa(physeq1, species=="Prevotella intermedia") # take the relative counts obtained before with phyloseq1 object
+OTU1.Pi = as(otu_table(gp.ch), "matrix")
+# transpose if necessary
+if(taxa_are_rows(gp.ch)){OTU1.Pi <- t(OTU1.Pi)}
+# Coerce to data.frame
+OTUdf.Pi = as.data.frame(OTU1.Pi)
+
+# add the case-control, method and site variable to OTUdf.Pg
+OTUdf.Pi<-merge(OTUdf.Pi, data, by="row.names")
+
+# for the Aa acitnomeicants:
+gp.ch = subset_taxa(physeq1, species=="Aggregatibacter actinomycetemcomitans") # take the relative counts obtained before with phyloseq1 object
+OTU1.Aa = as(otu_table(gp.ch), "matrix")
+# transpose if necessary
+if(taxa_are_rows(gp.ch)){OTU1.Aa <- t(OTU1.Aa)}
+# Coerce to data.frame
+OTUdf.Aa = as.data.frame(OTU1.Aa)
+
+# add the case-control, method and site variable to OTUdf.Pg
+OTUdf.Aa<-merge(OTUdf.Aa, data, by="row.names")
+
+```
+
+## 3) Make the box plots for these species
+
+
+```{r box plot, echo=FALSE}
+
+
+# for P gingivalis:
+stool = subset(OTUdf.Pg, OTUdf.Pg$site=="stool") 
+saliva = subset(OTUdf.Pg, OTUdf.Pg$site=="oral cavity") 
+#comparison of groups
+my_comparisons <- list( c("cancer", "control"), c("control", "pancreatitis"), c("pancreatitis", "cancer"))
+
+  compare_means(B_S26 ~ Disease.status,  data = saliva)
+  
+  p1 <- ggplot(saliva, aes(x=Disease.status, y=B_S26, fill = Disease.status )) 
+  p1=p1 + geom_boxplot() + geom_jitter(width = 0.2) + geom_point(size=0.1) +   
+      labs(title="Relative abundance of P. gingivalis in saliva",x="Status", y = "Relative adundance") +
+    theme(axis.title.x = element_text(size=10)) + 
+    theme(axis.title.y = element_text(size=10)) +
+    theme(plot.title = element_text(size=12)) +
+    theme_classic() + stat_compare_means(label.y = 0.25) +
+  stat_compare_means(comparisons = my_comparisons) # Add pairwise comparisons p-value
+#ggsave(p1, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/Pgingivalis_saliva.jpeg"), width = 10, height=10)
+    compare_means(B_S26 ~ Disease.status,  data = stool)
+  p2 <- ggplot(stool, aes(x=Disease.status, y=B_S26, fill = Disease.status )) 
+  p2=p2 + geom_boxplot() + geom_jitter(width = 0.2) + geom_point(size=0.1) +
+      labs(title="Relative abundance of P. gingivalis in stool",x="Status", y = "Relative adundance") +
+      theme(axis.title.x = element_text(size=10)) + 
+    theme(axis.title.y = element_text(size=10)) +
+    theme(plot.title = element_text(size=12)) +
+    theme_classic() + stat_compare_means(label.y = 0.01) +
+  stat_compare_means(comparisons = my_comparisons) # Add pairwise comparisons p-value
+require(gridExtra)
+curr.plot<-grid.arrange(p1, p2, nrow=2)
+ggsave(curr.plot, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Pgingivalis_16s.jpeg"), width = 7, height=10)
+ggsave(curr.plot, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Pgingivalis_16s.pdf"), width = 7, height=10)
+
+# for T. forsythia
+stool = subset(OTUdf.Tf, OTUdf.Tf$site=="stool") 
+saliva = subset(OTUdf.Tf, OTUdf.Tf$site=="oral cavity") 
+
+compare_means(B_S36262 ~ Disease.status,  data = saliva)
+
+  p1 <- ggplot(saliva, aes(x=Disease.status, y=as.numeric(B_S36262), fill = Disease.status )) 
+  p1=p1 + geom_boxplot() + geom_jitter(width = 0.2) + geom_point(size=0.1) + 
+      labs(title="Relative abundance of T. forsythia in saliva",x="Status", y = "Relative adundance") +
+    theme(axis.title.x = element_text(size=10)) + 
+    theme(axis.title.y = element_text(size=10)) +
+    theme(plot.title = element_text(size=12))  +
+    theme_classic() + stat_compare_means(label.y = 0.045) +
+  stat_compare_means(comparisons = my_comparisons)
+    
+    compare_means(B_S36262 ~ Disease.status,  data = stool)
+
+  p2 <- ggplot(stool, aes(x=Disease.status, y=B_S36262, fill = Disease.status )) 
+  p2=p2 + geom_boxplot() + geom_jitter(width = 0.2) + geom_point(size=0.1) + 
+      labs(title="Relative abundance of T. forsythia in stool",x="Status", y = "Relative adundance") +
+    theme(axis.title.x = element_text(size=10)) + 
+    theme(axis.title.y = element_text(size=10)) +
+    theme(plot.title = element_text(size=12))  +
+    theme_classic() + stat_compare_means(label.y = 0.4) +
+  stat_compare_means(comparisons = my_comparisons)
+require(gridExtra)
+curr.plot<-grid.arrange(p1, p2, nrow=2)
+ggsave(curr.plot, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Tforsythia.pdf"), width = 7, height=10)
+ggsave(curr.plot, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Tforsythia.png"), width = 7, height=10)
+
+# for P. intermedia
+stool = subset(OTUdf.Pi, OTUdf.Pi$site=="stool") 
+saliva = subset(OTUdf.Pi, OTUdf.Pi$site=="oral cavity") 
+
+compare_means(B_S25225 ~ Disease.status,  data = saliva)
+
+  p1 <- ggplot(saliva, aes(x=Disease.status, y=B_S25225, fill = Disease.status )) 
+  p1=p1 + geom_boxplot() + geom_jitter(width = 0.2) + geom_point(size=0.1) +
+      labs(title="Relative abundance of P. intermedia in saliva",x="Status", y = "Relative adundance") +
+    theme(axis.title.x = element_text(size=10)) + 
+    theme(axis.title.y = element_text(size=10)) +
+    theme(plot.title = element_text(size=12))    +
+    theme_classic() + stat_compare_means(label.y = 0.5) +
+  stat_compare_means(comparisons = my_comparisons) 
+    
+compare_means(B_S25225 ~ Disease.status,  data = stool)
+  p2 <- ggplot(stool, aes(x=Disease.status, y=B_S25225, fill = Disease.status )) 
+  p2=p2 + geom_boxplot() + geom_jitter(width = 0.2) + geom_point(size=0.1) +
+      labs(title="Relative abundance of P. intermedia in stool",x="Status", y = "Relative adundance (log10)") +
+    theme(axis.title.x = element_text(size=10)) + 
+    theme(axis.title.y = element_text(size=10)) +
+    theme(plot.title = element_text(size=12))    +
+    theme_classic() + stat_compare_means(label.y = 0.0025) +
+  stat_compare_means(comparisons = my_comparisons)
+require(gridExtra)
+curr.plot<-grid.arrange(p1, p2, nrow=2)
+ggsave(curr.plot, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Pintermedia.pdf"), width = 7, height=10)
+ggsave(curr.plot, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Pintermedia.png"), width = 7, height=10)
+
+# for Aa
+stool = subset(OTUdf.Aa, OTUdf.Aa$site=="stool") 
+saliva = subset(OTUdf.Aa, OTUdf.Aa$site=="oral cavity") 
+
+compare_means(B_S408 ~ Disease.status,  data = saliva)
+
+  p1 <- ggplot(saliva, aes(x=Disease.status, y=B_S408, fill = Disease.status )) 
+  p1=p1 + geom_boxplot() + geom_jitter(width = 0.2) + geom_point(size=0.1) + 
+    coord_trans(y = "log10", limy = NULL)+
+      labs(title="Relative abundance of A. actinomycetemcomitans in saliva",x="Status", y = "Relative adundance") +
+    theme(axis.title.x = element_text(size=10)) + 
+    theme(axis.title.y = element_text(size=10)) +
+    theme(plot.title = element_text(size=12))    +
+    theme_classic() + stat_compare_means(label.y = 0.02) +
+  stat_compare_means(comparisons = my_comparisons) 
+    
+compare_means(B_S408 ~ Disease.status,  data = stool)
+  p2 <- ggplot(stool, aes(x=Disease.status, y=B_S408, fill = Disease.status )) 
+  p2=p2 + geom_boxplot() + geom_jitter(width = 0.2) + geom_point(size=0.1) +
+      labs(title="Relative abundance of A. actinomycetemcomitans in stool",x="Status", y = "Relative adundance") +
+    theme(axis.title.x = element_text(size=10)) + 
+    theme(axis.title.y = element_text(size=10)) +
+    theme(plot.title = element_text(size=12))    +
+    theme_classic() + stat_compare_means(label.y = 0.02) +
+  stat_compare_means(comparisons = my_comparisons)
+require(gridExtra)
+curr.plot<-grid.arrange(p1, p2, nrow=2)
+ggsave(curr.plot, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Aactinomycetemcomitans.pdf"), width = 7, height=10)
+ggsave(curr.plot, filename=paste0("D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/Aactinomycetemcomitans.png"), width = 7, height=10)
+
+
+```
+
+
+## Another code by function:
+
+
+```{r}
+
+aa<- t.otu.pooled # my asv or otu table with taxa in rows and samples in columns, in matrix format
+
+bb<-aa/colSums(aa) # this is my relative abundance table
+
+#####for 16S
+meta.final <- div.data.otu
+meta.final$Disease.status <- recode(meta.final$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+keep.taxa.clean= bb
+
+# this is the function:
+
+plotspecies <- function(bacName){
+  root.dir<-"D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/"
+  data = as.data.frame(keep.taxa.clean[c(bacName),])
+  colnames(data) <- bacName
+  data$inputID <-  rownames(data)
+  colnames(data)[1] <- "bact"
+  #merge abundance nd metadata
+  plot.data = merge(data, meta.final, by.x ="inputID",by.y ="sample.name")
+
+  #plotting
+  stool = subset(plot.data, plot.data$site=="stool") 
+  saliva = subset(plot.data, plot.data$site=="oral cavity") 
+  #how many sample has the bact
+  print(sum(stool[,2]>0))
+  print(sum(saliva[,2]>0))
+  #comparison of groups
+  my_comparisons <- list( c("cancer", "control"), c("control", "pancreatitis"), c("pancreatitis", "cancer"))
+  
+  saliva$bact<-as.numeric(saliva$bact)
+  stool$bact<-as.numeric(stool$bact)
+
+  compare_means(bact ~ Disease.status,  data = saliva)
+
+#plot saliva
+  curr.plot <- ggplot(saliva, aes(x=Disease.status, y=log10(saliva[,2]), fill = Disease.status ))
+  curr.plot <- curr.plot + geom_boxplot() + geom_jitter(width = 0.2) +
+  labs(title="Prevotella intermedia", x="Disease.status", y = "Relative adundance (log10)") +
+  theme_classic() + stat_compare_means(label.y = -2.5) +
+  stat_compare_means(comparisons = my_comparisons) # Add pairwise comparisons p-value
+  ggsave(filename=paste0(root.dir, "Relative abundance of Prevotella intermedia in saliva_16S.pdf"), plot=curr.plot, width = 10, height = 10) 
+    compare_means(bact ~ Disease.status,  data = stool)
+#plot stool  
+  curr.plot <- ggplot(stool, aes(x=Disease.status, y=log10(stool[,2]), fill = Disease.status ))
+  curr.plot <- curr.plot + geom_boxplot() + geom_jitter(width = 0.2) +
+  labs(title= "Prevotella intermedia", x="Disease.status", y = "Relative adundance (log10)") +
+  theme_classic() + stat_compare_means(label.y = -4.2) +
+  stat_compare_means(comparisons = my_comparisons) # Add pairwise comparisons p-value
+  ggsave(filename=paste0(root.dir, "Relative abundance of Prevotella intermedia in stool_16S.pdf"), plot=curr.plot, width = 10, height = 10) 
+  
+} 
+
+# now I have the function loaded; to get the plots I need to run the function on the bacteria. 
+
+
+plotspecies("B_S26") #p gingivalis; uncomment for the plot you want
+#plotspecies("ASV_01899") #P intermedia; uncomment for the plot you want
+#plotspecies("B_S36262") #T. Forsythia; uncomment for the plot you want
+
+
+plotspecies("Porphyromonas gingivalis {ASV_04765}")
+plotspecies("Tannerella forsythia {refOTU_v2_3757}")
+plotspecies("Prevotella intermedia {refOTU_v2_0515}")
+plotspecies("Aggregatibacter actinomycetemcomitans")
+
+```
+
+
+```
+
+

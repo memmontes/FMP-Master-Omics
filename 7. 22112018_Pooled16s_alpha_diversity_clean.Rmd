@@ -1,0 +1,305 @@
+---
+title: "Alpha recalculated completed"
+author: "Esther Molina"
+date: "23 de noviembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## set the environment:
+
+```{r}
+
+library("phyloseq", warn.conflicts=F, quietly=T)
+library("ggplot2", warn.conflicts=F, quietly=T)
+library("gridExtra", warn.conflicts=F, quietly=T)
+library("permute", warn.conflicts=F, quietly=T)
+library("lattice", warn.conflicts=F, quietly=T)
+library("vegan", warn.conflicts=F, quietly=T)
+library("compareGroups", warn.conflicts=F, quietly=T)
+library("RColorBrewer")
+library("reshape2")
+library("plyr")
+
+source("https://raw.githubusercontent.com/defleury/Toolbox_16S/master/R/function.alpha_diversity.R")
+
+source("https://raw.githubusercontent.com/defleury/Toolbox_16S/master/R/function.rarefaction.R")
+
+```
+
+# load the data
+
+```{r}
+
+# the t.asv data:
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_ASVfinaldataframe_pooled.Rdata") # as data frame
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_ASVfinalMatrix_pooled.Rdata") # as matrix
+
+t.asv.data<-dupl.sumRow
+
+# the t.otu data:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_OPENfinaldataframe_pooled.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/19112018_OPENfinalMatrix_pooled.Rdata")
+
+t.otu.data<-dupl.sumRow
+
+rm(dupl.sumRow)
+
+dim(t.asv.data)
+dim(t.asv.pooled)
+
+dim(t.otu.data)
+dim(t.otu.pooled)
+
+```
+
+
+# calculate alpha-diversity:
+
+```{r}
+
+#count.table (a matrix, taxa are rows, needs to be provided)
+
+#count.table<-t(t.asv.pooled) # for ASV data
+
+count.table<-t(t.otu.pooled) # for OPEN OTU data
+dim(count.table)
+
+
+## --------------------------------------------------------------------##
+### Calculate ALPHA-DIVERSITY
+
+####### NOT NEEDED ######
+# Hill diversity the dataset
+D.rarefied <- function(count.table, size=1000, iterations=100, q.H=c(0, 1, 2)) # this is diversity for all samples at 1,000 reads for the a-diversity comparisons
+# calculate here richness (hill numbers; q=0), inv.Shannon (hill numbers; q=1) and Shannon (hill numbers q=2)
+  
+# ALTERNATIVELY, this is the functions code, in case you want to run it step by step:
+Hill_Diversity.rarefied <- function(count.table, size=1000, iterations=100, q.H=c(0, 1, 2)) {
+  #Get current sample sizes
+  # this is to get the diversity from 1000 samples
+  size.sample <- colSums(count.table)
+  #Get overall taxa count
+  n.tax <- nrow(count.table)
+  
+  #Get relative counts
+  count.table <- as.matrix(count.table)
+  ct.rel <- as.matrix(t(t(count.table) / size.sample))
+  
+  #Preallocate
+  D.rarefied <- as.data.frame(matrix(nrow=length(size.sample), ncol=4))
+  colnames(D.rarefied) <- c("sample.name", paste0("q.", q.H))
+  D.rarefied[, "sample.name"] <- names(size.sample)
+  
+  #Iteratively generate count tables
+  curr.ct <- apply(ct.rel, 2, function(p.vec) {replicate(iterations, table(sample(1:n.tax, size=size, prob=p.vec, replace=T)) / size)})
+  #Iterate through q values and calculate rarefied diversities
+  for (q.i in q.H) {
+    #Handle special cases of q=0 (richness only) and q=1 (exp(Shannon))
+    if (q.i == 0) {
+      curr.D <- sapply(curr.ct, function(x) {mean(sapply(x, length))})
+    } else if (q.i == 1) {
+      curr.D <- sapply(curr.ct, function(x) {mean(sapply(x, function(vec) {exp(shannon(vec))}))})
+    } else {
+      curr.D <- sapply(curr.ct, function(x) {mean(sapply(x, function(vec) {sum(vec ^ q.i) ^ (1/(1-q.i))}))})
+    }
+    #Replace values for undersampled samples with NA
+    curr.D[size.sample < size] <- NA
+    #Store in results frame
+    D.rarefied[, which(q.H == q.i)+1] <- curr.D
+  }
+  
+  D.rarefied
+}
+####### NOT NEEDED ######
+
+div.rarefied = Hill_Diversity.rarefied(count.table, size=1000, iterations=100, q.H=c(0, 1, 2)) ## ONLY VALID CODE LINE!!
+
+#div.rarefied.asv<-div.rarefied # for ASV
+div.rarefied.otu<-div.rarefied # for OPEN OTU
+
+#save(div.rarefied.asv, file="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/06112018_ASV_diversity.RData")
+
+save(div.rarefied.otu, file="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/06112018_OPEN_diversity.RData")
+
+
+```
+
+
+# need to remove the non-elible cases first (to not affect normalized otus - relative abundance):
+
+```{r}
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 795 samples
+
+data.sample<-data.sample[data.sample$MMPCID %in% rownames(t.asv.data),] # FOR THE ASV DATA
+
+data.sample<-subset(data.sample, data.sample$final_eligibility=="ELIGIBLE")
+
+# retain non-elible cases also onlu in the ASV table:
+
+t.asv.data<-t.asv.data[rownames(t.asv.data) %in% data.sample$MMPCID, ]
+
+# save the data as the final valid data WO duplicates and non-eligible cases
+
+write.csv(t.asv.data, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledElible.csv")
+
+save(t.asv.data, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+# covert to matrix format
+
+t.asv.pooled<-as.matrix(t.asv.data)
+class(t.asv.pooled)
+dim(t.asv.pooled)
+
+save(t.asv.pooled, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+# also save the metadata for ASV data:
+
+save(data.sample, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVdatasample_pooledEligible.Rdata")
+write.csv(data.sample, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVdatasample_pooledEligible.csv")
+
+
+```
+
+
+# calculate alpha-diversity for the eligble cases in ASV data:
+
+```{r}
+
+
+count.table<-t(t.asv.pooled) # for ASV data; (a matrix, taxa are rows, needs to be provided)
+dim(count.table)
+#[1] 3393  573
+
+div.rarefied = Hill_Diversity.rarefied(count.table, size=1000, iterations=100, q.H=c(0, 1, 2))
+
+
+div.rarefied.asv<-div.rarefied # for ASV
+
+save(div.rarefied.asv, file="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/27112018_ASV_diversityEligible.RData")
+
+```
+
+
+
+# the same for the OPEN data:
+```{r}
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 779 samples
+
+data.sample<-data.sample[data.sample$MMPCID %in% rownames(t.otu.data),] # FOR THE OPEN DATA
+
+data.sample<-subset(data.sample, data.sample$final_eligibility=="ELIGIBLE")
+
+# retain non-elible cases also onlu in the ASV table:
+
+t.otu.data<-t.otu.data[rownames(t.otu.data) %in% data.sample$MMPCID, ]
+
+# save the data as the final valid data WO duplicates and non-eligible cases
+
+write.csv(t.otu.data, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledElible.csv")
+
+save(t.otu.data, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+# covert to matrix format
+
+t.otu.pooled<-as.matrix(t.otu.data)
+class(t.otu.pooled)
+dim(t.otu.pooled)
+
+save(t.otu.pooled, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+# also save the metadata for OPEN data:
+
+save(data.sample, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENdatasample_pooledEligible.Rdata")
+write.csv(data.sample, file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENdatasample_pooledEligible.csv")
+
+
+```
+
+# calculate alpha-diversity for the eligble cases in OPEN data:
+
+```{r}
+
+
+count.table<-t(t.otu.pooled) # for ASV data; (a matrix, taxa are rows, needs to be provided)
+dim(count.table)
+#[1] 852  573
+
+div.rarefied = Hill_Diversity.rarefied(count.table, size=1000, iterations=100, q.H=c(0, 1, 2))
+
+
+div.rarefied.otu<-div.rarefied # for ASV
+
+save(div.rarefied.otu, file="D:/EMBL_STAY/16SLabResults_SecondBatch/alpha_diversity_pooled/27112018_OPEN_diversityEligible.RData")
+
+```
+
+
+# perform some descriptives of the new dataset:
+
+```{r}
+
+data.sample$sex<-as.factor(data.sample$sex)
+data.sample$center<-as.factor(data.sample$center)
+data.sample$casecontrol<-as.factor(data.sample$casecontrol)
+data.sample$duplicate<-as.factor(data.sample$duplicate)
+
+res <- compareGroups(casecontrol ~ site+method+RUN+final_eligibility+duplicate+center+sex+agec, data=data.sample, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+res <- compareGroups(site ~casecontrol+method+RUN+final_eligibility+duplicate+center+sex+agec, data=data.sample, ref.no='no', hide=NA, include.miss=FALSE)
+restab<-createTable(res, show.ratio=FALSE, hide.no="n")
+restab
+summary(restab)
+
+```
+
+## add the diversity variables to the metadata:
+
+```{r}
+
+# merge diversity data with metadata
+
+# metadata:
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_16sDatacomplete(N=779).RData") # keeps here 779 samples
+
+data.sample.asv<-data.sample[data.sample$MMPCID %in% rownames(t.asv.data),] # FOR THE ASV DATA
+
+data.sample.otu<-data.sample[data.sample$MMPCID %in% rownames(t.otu.data),] # FOR THE OPEN DATA
+
+
+div.data.asv<-merge(div.rarefied.asv, data.sample.asv, by.x="sample.name", by.y="MMPCID")
+div.data.otu<-merge(div.rarefied.otu, data.sample.otu, by.x="sample.name", by.y="MMPCID")
+
+div.data.asv$status[div.data.asv$casecontrol==0]<-"control"
+div.data.asv$status[div.data.asv$casecontrol==1]<-"cancer"
+div.data.asv$status[div.data.asv$casecontrol==2]<-"pancreatitis"
+
+div.data.otu$status[div.data.otu$casecontrol==0]<-"control"
+div.data.otu$status[div.data.otu$casecontrol==1]<-"cancer"
+div.data.otu$status[div.data.otu$casecontrol==2]<-"pancreatitis"
+
+# save everything:
+
+save(div.data.otu, file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+save(div.data.asv, file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+write.csv(div.data.otu, file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).csv")
+write.csv(div.data.asv, file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).csv")
+
+
+```
+
+
