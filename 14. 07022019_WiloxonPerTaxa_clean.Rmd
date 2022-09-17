@@ -1,0 +1,540 @@
+---
+title: "Wilcoxon in per taxa analyses"
+author: "Esther Molina"
+date: "4 de diciembre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## set the environment
+# load the libraries
+```{r load the libraries}
+
+library(car)
+library(base)
+library(Biobase)
+library(ggplot2)
+library(RColorBrewer)
+library(mixOmics)
+library(gplots)
+#library("ALL")
+library("RColorBrewer")
+library("reshape2")
+library("ggplot2")
+library("vegan")
+```
+
+# load the data
+## START WITH ASV DATA:
+```{r}
+
+# the metadata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_OTU_diversmetadata(N=580).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/27112018_ASV_diversmetadata(N=573).RData")
+
+# the otutables:
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinalMatrix_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_ASVfinaldataframe_pooledEligible.Rdata")
+
+load(file="D:/EMBL_STAY/16SLabResults_SecondBatch/27112018_OPENfinaldataframe_pooledEligible.Rdata")
+
+dim(t.asv.pooled)
+
+dim(t.otu.pooled)
+
+
+# beta-diversity measures
+
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivASVrel_Eligible.RData")
+beta.div.ASV<-beta.div
+load("D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Final samples WO dupl and eleg/30112018_16s_betasdivOPENrel_Eligible.RData")
+beta.div.OPEN<-beta.div
+rm(beta.div)
+
+# put all these files together to take the Rdata to Linux server:
+
+#save(beta.div.ASV, beta.div.OPEN, div.data.asv, div.data.otu, t.asv.data, t.asv.pooled, t.otu.data, t.otu.pooled, file="R:/Genetic_and_Molecular_Epidemiology/Homes/memolina/PERMANOVA/02122018_AllfilesPermanova.RData" )
+# to open in Linux:
+
+#load(file="/home/memolina/PERMANOVA/02122018_AllfilesPermanova.RData" )
+
+# also bring the otu tables here:
+# load the otudata:
+
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataASV(N=779).RData")
+load(file="D:/EMBL_STAY/DATA/AllSequenced16sData/29102018_otudataOPEN(N=779).RData")
+
+
+
+```
+
+# put the otu data in the same format:
+
+```{r}
+
+# put everything in the same format: for ASV data
+
+t.asv<-as.data.frame(t(t.asv.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.ASV[otu.data.ASV$ASV_name %in% rownames(t.asv) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$ASV_name
+
+otdata<-otdata[rownames(t.asv),]
+
+# to check:
+identical(rownames(otdata), rownames(t.asv)) # TRUE
+
+# ot data is my otu taxonomy table!
+
+
+
+
+```
+
+
+# Prepare the data to use edgeR
+
+As we are going to control for some variables, we will need to transform some metadata variables beforehand (as done for the permanova results).
+
+
+```{r some transformed variables}
+
+##########################################
+# generate the method, metformin and smoking status:
+
+# add first the disease status variable:
+div.data.asv$Disease.status <- recode(div.data.asv$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+data.sample <- div.data.asv
+
+# for the OPEN data, uncomment the following:
+
+#div.data.otu$Disease.status <- recode(div.data.otu$casecontrol, "'1'='cancer'; '0' = 'control'; '2' = 'pancreatitis'")
+
+#data.sample <- div.data.otu
+
+# also add the new method variable to distinguish between both methos in the microbiome study:
+data.sample$method.y[data.sample$method=="MetaG" & data.sample$center==8]<-"MetaG2"
+data.sample$method.y[is.na(data.sample$method.y)]<-"MetaG1"
+data.sample$method.y[data.sample$method=="Listerine 1"]<-"Listerine 1"
+data.sample$method.y[data.sample$method=="Listerine 2"]<-"Listerine 2"
+data.sample$method.y[data.sample$method=="Listerine 3"]<-"Listerine 3"
+table(data.sample$method.y)
+
+# change smoking status:
+table(data.sample$smokingstatus)
+#data.sample$smokingstatus<-as.factor(data.sample$smokingstatus)
+data.sample$smokingstatus.y<-recode(data.sample$smokingstatus, "0=0; 2=1; 3=2; 1=2")
+table(data.sample$smokingstatus.y)
+
+# reclassify metformin ever: variable called metformin ever.yy
+table(data.sample$metformin.ever)
+data.sample$metformin.ever.y<-ifelse(data.sample$alldiab==0, 0, NA)
+data.sample$metformin.ever.y<-ifelse(is.na(data.sample$metformin.ever.y) & data.sample$metformin.ever==1, 1, data.sample$metformin.ever.y)
+data.sample$metformin.ever.y<-ifelse(is.na(data.sample$metformin.ever.y), 2, data.sample$metformin.ever.y)
+data.sample$metformin.ever.y<-ifelse(is.na(data.sample$metformin.ever), NA, data.sample$metformin.ever.y)
+data.sample$metformin.ever.y<-factor(data.sample$metformin.ever.y, levels=c("0","1","2"), labels=c("no diabetes", "metformin use", "no metformin use"))
+table(data.sample$metformin.ever.y)
+table(data.sample$alldiab) # to double check
+
+# put rownames as sample.names in div.dataEleg.Imp
+rownames(data.sample)<-data.sample$sample.name
+
+```
+
+We want to keep only those taxa (OTUs) with prevalence > 2.5% in all samples (before we had 10%). This is also important to consider in order to not negatively influence multiple test correction, and to avoid the presence of false postives.
+This is however too strict as we kept only 1,015 OTUs and less than 1000 by site. We will consider all OTUs for the analyses.
+
+```{r filter out samples with prevalence higher than 5%}
+
+# no longer; filtering by site is more adelaute
+
+#a.no<-t.asv.pooled# otu_table comes from code below for the Eligible cases:
+
+#a.no = a.no[, colSums(a.no) >= 4 & colSums(a.no > 0) >= (0.025 * nrow(a.no))] 
+#a.no<-as.data.frame(a.no) # I keep 1,015 OTUs after filtering for the top 2.5% prevalent OTUs
+
+
+```
+
+
+# Filtering of 5% prevalence by site:
+
+## ASV data
+
+```{r filter out samples with prevalence higher than 5%}
+
+
+a.no<-t.asv.pooled# otu_table comes from code below for the Eligible cases:
+#a.no = a.no[, colSums(a.no) >= 4 & colSums(a.no > 0) >= (0.025 * nrow(a.no))] 
+#a.no<-as.data.frame(a.no) # I keep 1,015 OTUs after filtering for the top 2.5% prevalent OTUs
+
+# to do it by filtering in the first tep by site:
+
+data.sample_OR<-subset(data.sample, data.sample$site=="oral cavity")
+data.sample_ST<-subset(data.sample, data.sample$site=="stool")
+
+a.no.saliva<-a.no[rownames(data.sample_OR),] # extract ano.saliva otu_table
+a.no.saliva = a.no.saliva[, colSums(a.no.saliva) >= 4 & colSums(a.no.saliva > 0) >= (0.05 * nrow(a.no.saliva))] 
+dim(a.no.saliva)
+# there are 527 taxa remain
+a.no.saliva = a.no.saliva[,colSums(a.no.saliva) > 0] # the same number of taxa remain
+
+a.no.stool<-a.no[rownames(data.sample_ST),]
+a.no.stool = a.no.stool[, colSums(a.no.stool) >= 4 & colSums(a.no.stool > 0) >= (0.05 * nrow(a.no.stool))]
+dim(a.no.stool)
+# there are 675 taxa remain
+a.no.stool = a.no.stool[,colSums(a.no.stool) > 0] # the same number of taxa remain
+
+```
+
+
+
+
+
+# DATA PREPARATION FOR OPEN DATA:
+
+```{r}
+
+##################################################################
+# the same for OPEN DATA (uncomment when OPEN data is to be used):
+# put everything in the same format: for ASV data
+
+t.otu<-as.data.frame(t(t.otu.data))
+
+# consider the taxonomy table:
+otdata<-otu.data.OPEN[otu.data.OPEN$OTU_name %in% rownames(t.otu) , ] # here all the filtered taxa are contained, 
+
+#and taxonomy table should be ordered the same
+rownames(otdata)<-otdata$OTU_name
+
+otdata<-otdata[rownames(t.otu),]
+
+# to check:
+identical(rownames(otdata), rownames(t.otu)) # TRUE
+
+# ot data is my otu taxonomy table!
+
+a.no<-t.otu.pooled# otu_table comes from code below for the Eligible cases:
+
+data.sample_OR<-subset(data.sample, data.sample$site=="oral cavity")
+data.sample_ST<-subset(data.sample, data.sample$site=="stool")
+
+a.no.saliva<-a.no[rownames(data.sample_OR),] # extract ano.saliva otu_table
+a.no.saliva = a.no.saliva[, colSums(a.no.saliva) >= 4 & colSums(a.no.saliva > 0) >= (0.05 * nrow(a.no.saliva))] 
+dim(a.no.saliva)
+# there are 527 taxa remain
+a.no.saliva = a.no.saliva[,colSums(a.no.saliva) > 0] # the same number of taxa remain
+
+a.no.stool<-a.no[rownames(data.sample_ST),]
+a.no.stool = a.no.stool[, colSums(a.no.stool) >= 4 & colSums(a.no.stool > 0) >= (0.05 * nrow(a.no.stool))]
+dim(a.no.stool)
+# there are 675 taxa remain
+a.no.stool = a.no.stool[,colSums(a.no.stool) > 0] # the same number of taxa remain
+
+
+```
+
+
+
+## RUN WILCOXON (ONE BY ONE variables): FOR SALIVA
+
+```{r Wilcoxon test to test for the association of each taxa with case-control status}
+
+# subset to cases and controls
+WOPC<-subset(data.sample_OR, data.sample_OR$Disease.status=="control" | data.sample_OR$Disease.status=="cancer")
+
+WOPC<-subset(data.sample_OR, data.sample_OR$Disease.status=="pancreatitis" | data.sample_OR$Disease.status=="cancer")
+
+WOPC<-subset(data.sample_OR, data.sample_OR$Disease.status=="pancreatitis" | data.sample_OR$Disease.status=="control")
+
+
+# keep cases and controls only in OTU table
+a.no.salivaWOPC<-a.no.saliva[rownames(WOPC),]
+
+identical(rownames(a.no.salivaWOPC), rownames(WOPC)) # TRUE
+
+#get relative abundances:
+
+a.no.salivaWOPC<-a.no.salivaWOPC/rowSums(a.no.salivaWOPC)
+
+#mylist<-a.no.salivaWOPC
+#res<-lapply(mylist, function(x) wilcox.test(x ~ as.factor(Disease.status), data=WOPC)) # works but we need to extract!
+#result<-sapply(res, function(res) res$p.value)
+
+
+#aa<-wilcox.test(a.no.salivaWOPC$B_S25225 ~ Disease.status, data=WOPC)
+#str(aa)
+#aa$p.value
+#aa$statistic
+
+# do it as a lopp
+
+mylist<-a.no.salivaWOPC
+mylfit <- function(i){
+  
+  Mod  <- wilcox.test(mylist[,i] ~ as.factor(Disease.status), data=WOPC)
+  
+  cbind(
+    colnames(mylist)[i], 
+    colSums(mylist)[i],
+    Mod$statistic, 
+    round((Mod$p.value),4), 
+    dim(mylist)[2]
+  )
+}
+
+Out <- lapply(1:dim(mylist)[2] , mylfit)
+Result <- do.call(rbind,Out) # make list a matrix
+Result <- data.frame (Result,stringsAsFactors = FALSE)
+colnames(Result) <- c("OTU", "NOTU","parameter", "pvalue", "total")
+Result
+
+#to adjust for multiple test
+p.bh<-p.adjust(Result[,4], "BH") #False discovery rate (Benjamini Hochberg)
+Results.adj=data.frame(cbind(Result,p.bh))
+Results.adj
+Results.adj <- Results.adj[order(Results.adj[,6]),] #All Results with FDR values
+Results.significants<-Results.adj[Results.adj[,6]<0.05,] #Only significant results
+#View(Results.significants)
+  
+########### ANY TAXA  
+
+Results.adj<-merge(Results.adj, otdata, by=0, all.x=TRUE)
+Results.adj <- Results.adj[order(Results.adj[,7]),] #All Results with FDR values
+
+Results.significants<-merge(Results.significants, otdata, by=0, all.x=TRUE)
+Results.significants <- Results.significants[order(Results.significants[,6]),] #All Results with FDR values
+
+
+#Export (full) table of OTU associations
+write.table(Results.adj, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Wilcoxon/07022019_Wilcoxon_saliva (controlsVSPancretitis)_239(all)OPEN.csv", sep="\t", col.names=NA)
+#write.table(Results.significants, file="C:/Users/memolina/Documents/EMBL_STAY/TABLES_RESULTS/Wilcoxon/20112017_Wilcoxon_saliva (CaseControl)_all.csv", sep="\t", col.names=NA)
+
+Results.adj_saliva<-Results.adj
+Results.significants_saliva<-Results.significants
+
+```
+
+
+
+## RUN WILCOXON (ONE BY ONE variables): FOR STOOL
+
+```{r Wilcoxon test to test for the association of each taxa with case-control status}
+
+# subset to cases and controls
+WOPC<-subset(data.sample_ST, data.sample_ST$Disease.status=="control" | data.sample_ST$Disease.status=="cancer")
+
+WOPC<-subset(data.sample_ST, data.sample_ST$Disease.status=="pancreatitis" | data.sample_ST$Disease.status=="cancer")
+
+WOPC<-subset(data.sample_ST, data.sample_ST$Disease.status=="pancreatitis" | data.sample_ST$Disease.status=="control")
+
+
+# keep cases and controls only in OTU table
+a.no.stoolWOPC<-a.no.stool[rownames(WOPC),]
+
+identical(rownames(a.no.stoolWOPC), rownames(WOPC)) # TRUE
+
+#get relative abundances:
+
+a.no.stoolWOPC<-a.no.stoolWOPC/rowSums(a.no.stoolWOPC)
+
+# as a lopp
+
+mylist<-a.no.stoolWOPC
+mylfit <- function(i){
+  
+  Mod  <- wilcox.test(mylist[,i] ~ as.factor(Disease.status), data=WOPC)
+  
+  cbind(
+    colnames(mylist)[i], 
+    colSums(mylist)[i],
+    Mod$statistic, 
+    round((Mod$p.value),4), 
+    dim(mylist)[2]
+  )
+}
+
+Out <- lapply(1:dim(mylist)[2] , mylfit)
+Result <- do.call(rbind,Out) # make list a matrix
+Result <- data.frame (Result,stringsAsFactors = FALSE)
+colnames(Result) <- c("OTU", "NOTU","parameter", "pvalue", "total")
+Result
+
+#to adjust for multiple test
+p.bh<-p.adjust(Result[,4], "BH") #False discovery rate (Benjamini Hochberg)
+Results.adj=data.frame(cbind(Result,p.bh))
+Results.adj
+Results.adj <- Results.adj[order(Results.adj[,6]),] #All Results with FDR values
+Results.significants<-Results.adj[Results.adj[,6]<0.05,] #Only significant results
+#View(Results.significants)
+  
+########### ANY TAXA  
+
+Results.adj<-merge(Results.adj, otdata, by=0, all.x=TRUE)
+Results.adj <- Results.adj[order(Results.adj[,7]),] #All Results with FDR values
+
+Results.significants<-merge(Results.significants, otdata, by=0, all.x=TRUE)
+Results.significants <- Results.significants[order(Results.significants[,6]),] #All Results with FDR values
+
+
+#Export (full) table of OTU associations
+write.table(Results.adj, file="D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Wilcoxon/07022019_Wilcoxon_stool (ControlsVSPancreatitis)_423OPEN(all).csv", sep="\t", col.names=NA)
+#write.table(Results.significants, file="C:/Users/memolina/Documents/EMBL_STAY/TABLES_RESULTS/Wilcoxon/20112017_Wilcoxon_stool (CaseControl)_all.csv", sep="\t", col.names=NA)
+
+Results.adj_stool<-Results.adj
+Results.significants_stool<-Results.significants
+
+```
+
+
+# Perform some plots:
+
+```{r taxonomic plots, echo=FALSE}
+
+# load some libraries
+
+library(ggplot2, quietly=T)
+library(gplots, quietly=T)
+
+# save this results as an object:
+
+Results.adj_stool$log10P = -log10(as.numeric(Results.adj_stool$p.bh)) # take the FDR p-value
+#Results.significants_stool<-Results.significants
+#Results.significants_stool$log10P = -log10(as.numeric(Results.significants_stool$p.bh))
+
+#Fix taxonomic levels into factors
+
+Results.adj_stool$genus = droplevels(Results.adj_stool$genus)
+Results.adj_stool$genus <- factor(Results.adj_stool$genus, levels=c(sort(levels(Results.adj_stool$genus)), "Unclassified")); Results.adj_stool$genus[Results.adj_stool$genus == ""] <- "Unclassified";
+Results.adj_stool$phylum = droplevels(Results.adj_stool$phylum)
+Results.adj_stool$phylum <- factor(Results.adj_stool$phylum, levels=c(sort(levels(Results.adj_stool$phylum)), "Unclassified")); Results.adj_stool$phylum[is.na(Results.adj_stool$phylum)] <- "Unclassified";
+
+Relative_Abundance<-as.numeric(Results.adj_stool$NOTU) # to have it as an object
+# change inf log10P to 3 as log10 of 0 is Inf. However, we could do this by just adding 0.00001 to the first conversion. This gives log10 value equal to 6. Let´s consider that pbh was 0.001: the log10P value would be 3
+Results.adj_stool2<-Results.adj_stool
+Results.adj_stool2$log10P<-ifelse(Results.adj_stool2$log10P==Inf, 3, Results.adj_stool2$log10P)
+Results.adj_stool<-Results.adj_stool2 # transform back
+rm(Results.adj_stool2)
+
+#Plot by phylum
+root.dir<-"D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Wilcoxon"
+curr.plot <- ggplot(Results.adj_stool, aes(x=genus, y=log10P, colour=phylum, fill=phylum, size=Relative_Abundance)) +
+  #Plot points per OTU, categorized by genus on the x axis
+  geom_point(alpha=0.8, position=position_jitterdodge()) +
+  #Use a color.brewer palette
+  scale_colour_brewer(type="qual", palette="Paired") +
+  #Label axes
+  xlab("Taxonomy at genus level") +
+  ylab("log10P-value") +
+  geom_hline(yintercept=1.3,color="red",  linetype="dashed", size=0.5) + # add horizontal line to indicate statistical signficance
+  coord_flip() + # flip the coordinates
+  #Set overall plot theme
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust=0, vjust=0.5)) 
+curr.plot
+ggsave(filename=paste0(root.dir, "Differentially abundant genus in stool_16S_Wilcoxon_flipped_Corr.png"), plot=curr.plot, width = 20, height = 40) 
+
+# the same for family:
+Results.adj_stool$family = droplevels(Results.adj_stool$family)
+Results.adj_stool$family <- factor(Results.adj_stool$family, levels=c(sort(levels(Results.adj_stool$family)), "Unclassified")); Results.adj_stool$family[Results.adj_stool$family == ""] <- "Unclassified";
+
+Results.adj_stool$phylum = droplevels(Results.adj_stool$phylum)
+Results.adj_stool$phylum <- factor(Results.adj_stool$phylum, levels=c(sort(levels(Results.adj_stool$phylum)), "Unclassified")); Results.adj_stool$phylum[is.na(Results.adj_stool$phylum)] <- "Unclassified";
+
+#Plot by family
+root.dir<-"C:/Users/memolina/Documents/EMBL_STAY/TABLES_RESULTS/Wilcoxon/"
+curr.plot <- ggplot(Results.adj_stool, aes(x=family, y=log10P, colour=phylum, fill=phylum, size=Relative_Abundance)) +
+  #Plot points per OTU, categorized by genus on the x axis
+  geom_point(alpha=0.8, position=position_jitterdodge()) +
+  #Use a color.brewer palette
+  scale_colour_brewer(type="qual", palette="Paired") +
+  #Label axes
+  xlab("Taxonomy at family level") +
+  ylab("log10P-value") +
+  geom_hline(yintercept=1.3,color="red",  linetype="dashed", size=0.5) + # add horizontal line to indicate statistical signficance
+  coord_flip() + # flip the coordinates
+  #Set overall plot theme
+  theme_bw() #+
+  #theme(axis.text.x = element_text(angle = 90, hjust=0, vjust=0.5))
+curr.plot
+ggsave(filename=paste0(root.dir, "Differentially abundant family in stool_16S_Wilcoxon_flipped_Corr.pdf"), plot=curr.plot, width = 20, height = 10) 
+
+
+# the same for the saliva samples:
+
+Results.adj_saliva$log10P = -log10(as.numeric(Results.adj_saliva$p.bh)) # take the FDR p-value
+
+
+Results.adj_saliva$genus = droplevels(Results.adj_saliva$genus)
+Results.adj_saliva$genus <- factor(Results.adj_saliva$genus, levels=c(sort(levels(Results.adj_saliva$genus)), "Unclassified")); Results.adj_saliva$genus[Results.adj_saliva$genus == ""] <- "Unclassified";
+Results.adj_saliva$phylum = droplevels(Results.adj_saliva$phylum)
+Results.adj_saliva$phylum <- factor(Results.adj_saliva$phylum, levels=c(sort(levels(Results.adj_saliva$phylum)), "Unclassified")); Results.adj_saliva$phylum[is.na(Results.adj_saliva$phylum)] <- "Unclassified";
+
+Relative_Abundance<-as.numeric(Results.adj_saliva$NOTU) # to have it as an object
+# change inf log10P to 3 as log10 of 0 is Inf. However, we could do this by just adding 0.00001 to the first conversion. This gives log10 value equal to 6. Let´s consider that pbh was 0.001: the log10P value would be 3
+Results.adj_saliva2<-Results.adj_saliva
+Results.adj_saliva2$log10P<-ifelse(Results.adj_saliva2$log10P==Inf, 3, Results.adj_saliva2$log10P)
+Results.adj_saliva<-Results.adj_saliva2 # transform back
+rm(Results.adj_saliva2)
+
+#Plot by phylum
+root.dir<-"D:/EMBL_STAY/16SLabResults_SecondBatch/beta-diversity/Wilcoxon"
+curr.plot <- ggplot(Results.adj_saliva, aes(x=genus, y=log10P, colour=phylum, fill=phylum, size=Relative_Abundance)) +
+  #Plot points per OTU, categorized by genus on the x axis
+  geom_point(alpha=0.8, position=position_jitterdodge()) +
+  #Use a color.brewer palette
+  scale_colour_brewer(type="qual", palette="Paired") +
+  #Label axes
+  xlab("Taxonomy at genus level") +
+  ylab("log10P-value") +
+  geom_hline(yintercept=1.3,color="red",  linetype="dashed", size=0.5) + # add horizontal line to indicate statistical signficance
+  coord_flip() + # flip the coordinates
+  #Set overall plot theme
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust=0, vjust=0.5)) 
+curr.plot
+ggsave(filename=paste0(root.dir, "07022019_Differentially abundant genus in saliva_16S_Wilcoxon_flipped_Corr (ControlsVSPancreatitis).png"), plot=curr.plot, width = 20, height = 40) 
+
+# the same for family:
+Results.adj_saliva$family = droplevels(Results.adj_saliva$family)
+Results.adj_saliva$family <- factor(Results.adj_saliva$family, levels=c(sort(levels(Results.adj_saliva$family)), "Unclassified")); Results.adj_saliva$family[Results.adj_saliva$family == ""] <- "Unclassified";
+
+Results.adj_saliva$phylum = droplevels(Results.adj_saliva$phylum)
+Results.adj_saliva$phylum <- factor(Results.adj_saliva$phylum, levels=c(sort(levels(Results.adj_saliva$phylum)), "Unclassified")); Results.adj_saliva$phylum[is.na(Results.adj_saliva$phylum)] <- "Unclassified";
+
+#Plot by family
+root.dir<-"C:/Users/memolina/Documents/EMBL_STAY/TABLES_RESULTS/Wilcoxon/"
+curr.plot <- ggplot(Results.adj_saliva, aes(x=family, y=log10P, colour=phylum, fill=phylum, size=Relative_Abundance)) +
+  #Plot points per OTU, categorized by genus on the x axis
+  geom_point(alpha=0.8, position=position_jitterdodge()) +
+  #Use a color.brewer palette
+  scale_colour_brewer(type="qual", palette="Paired") +
+  #Label axes
+  xlab("Taxonomy at family level") +
+  ylab("log10P-value") +
+  geom_hline(yintercept=1.3,color="red",  linetype="dashed", size=0.5) + # add horizontal line to indicate statistical signficance
+  coord_flip() + # flip the coordinates
+  #Set overall plot theme
+  theme_bw() #+
+  #theme(axis.text.x = element_text(angle = 90, hjust=0, vjust=0.5))
+curr.plot
+ggsave(filename=paste0(root.dir, "Differentially abundant family in saliva_16S_Wilcoxon_flipped_Corr.pdf"), plot=curr.plot, width = 20, height = 10) 
+
+
+```
+
+
+
